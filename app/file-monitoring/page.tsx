@@ -1,22 +1,21 @@
-"use client";
 import { useState, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
 import { useWebSocket } from '@/lib/websocket-context';
-import { useWebSocket } from '@/lib/websocket-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-type MonitoredFile = Database['public']['Tables']['monitored_files']['Row'];
+type MonitoredFile = Database['public']['Tables']['monitored_files']['Row';
+type Alert = Database['public']['Tables']['alerts']['Row';
 
 // --- MAIN FILE MONITORING PAGE COMPONENT ---
 export default function FileMonitoringPage() {
   const { selectedAgent } = useAgent();
-  const { sendCommand } = useWebSocket();
-  const { sendCommand } = useWebSocket();
+  const { sendCommand, logs } = useWebSocket();
   const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [newFilePath, setNewFilePath] = useState('');
   const supabase = createClient();
 
@@ -37,7 +36,24 @@ export default function FileMonitoringPage() {
       }
     };
 
+    const fetchAlerts = async () => {
+      const { data, error } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('agent_id', selectedAgent.id)
+        .eq('alert_type', 'file_monitoring')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error fetching file monitoring alerts:', error);
+      } else {
+        setAlerts(data);
+      }
+    };
+
     fetchMonitoredFiles();
+    fetchAlerts();
 
     // Set up real-time subscription
     const channel = supabase
@@ -87,9 +103,30 @@ export default function FileMonitoringPage() {
       )
       .subscribe();
 
-    // Cleanup subscription on unmount or when selectedAgent changes
+    // Set up real-time subscription for alerts
+    const alertsChannel = supabase
+      .channel(`alerts:agent_id=eq.${selectedAgent.id}`)
+      .on<Alert>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'alerts',
+          filter: `agent_id=eq.${selectedAgent.id}`,
+        },
+        (payload: RealtimePostgresChangesPayload<Alert>) => {
+          if (payload.new.alert_type === 'file_monitoring') {
+            console.log('New file monitoring alert:', payload.new);
+            setAlerts((current) => [payload.new, ...current.slice(0, 9)]); // Keep only 10
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount or when selectedAgent changes
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(alertsChannel);
     };
   }, [selectedAgent, supabase]);
 
@@ -203,11 +240,45 @@ export default function FileMonitoringPage() {
           </div>
         </div>
 
-        {/* Recent File Logs */}
+        {/* Recent File Activity */}
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-          <h3 className="text-xl font-bold text-white mb-4">Recent File Logs</h3>
-          <div className="font-mono text-xs text-slate-400 space-y-3">
-            <p>Coming soon...</p>
+          <h3 className="text-xl font-bold text-white mb-4">Recent File Activity</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {selectedAgent ? (
+              <>
+                {/* Show alerts */}
+                {alerts.map((alert) => (
+                  <div key={`alert-${alert.id}`} className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <p className="text-red-400 font-mono text-sm">{alert.title}: {alert.message}</p>
+                      <span className="text-xs text-slate-500 whitespace-nowrap">
+                        {new Date(alert.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {/* Show logs */}
+                {logs
+                  .filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring')
+                  .slice(0, 10)
+                  .map((logEntry, index) => (
+                    <div key={`log-${index}`} className="bg-slate-800 p-3 rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <p className="text-cyan-400 font-mono text-sm">{logEntry.message}</p>
+                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                          {new Date(logEntry.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                }
+              </>
+            ) : (
+              <p className="text-slate-400">Select an agent to view file activity</p>
+            )}
+            {selectedAgent && alerts.length === 0 && logs.filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring').length === 0 && (
+              <p className="text-slate-400">No recent file activity</p>
+            )}
           </div>
         </div>
       </div>

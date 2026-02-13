@@ -152,17 +152,24 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                 <h3 className="text-lg font-semibold text-white mb-4">Firewall Status</h3>
-                <button 
-                    onClick={handleToggleFirewall}
-                    className={`w-full flex items-center justify-center gap-3 py-3 rounded-lg font-semibold transition-colors ${
-                        firewallEnabled
-                            ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                            : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                    }`}
-                >
-                    {firewallEnabled ? <Shield size={20} /> : <ShieldOff size={20} />}
+                <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Firewall</span>
+                    <button
+                        onClick={handleToggleFirewall}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                            firewallEnabled ? 'bg-green-500' : 'bg-gray-600'
+                        }`}
+                    >
+                        <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                firewallEnabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                    </button>
+                </div>
+                <p className="text-sm text-slate-500 mt-2">
                     {firewallEnabled ? 'Active' : 'Inactive'}
-                </button>
+                </p>
             </div>
             {/* <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                  <h3 className="text-lg font-semibold text-white mb-4">Default Incoming</h3>
