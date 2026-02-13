@@ -79,12 +79,11 @@ const handleToggleFirewall = async () => {
   });
 };
 
-  const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) => {
-    if (policyType === 'incoming') setDefaultIncoming(value);
-    else setDefaultOutgoing(value);
-    // This should send a command to the agent.
-    console.log(`ALERT on ${selectedAgent?.name}: Default ${policyType} policy changed to ${value}.`);
-  };
+const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) => {
+  // Policy dropdowns are disabled — log only for now
+  console.log(`Default ${policyType} policy changed to ${value} (not applied yet)`);
+  // TODO: sendCommand(selectedAgent.id, "set_policy", { type: policyType, value });
+};
 
   const handleAddRule = (e: React.SubmitEvent) => {
     e.preventDefault();
