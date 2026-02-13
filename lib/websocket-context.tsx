@@ -53,8 +53,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     // Determine the WebSocket protocol
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = process.env.NODE_ENV === 'development' 
-      ? 'hidps.simiyuclint.com' 
-      : 'hidps.simiyuclint.com';
+      ? 'hidps-backend.onrender.com' 
+      : 'hidps-backend.onrender.com';
     const wsUrl = `${protocol}//${host}/?user_id=${userId}`;
 
     const ws = new WebSocket(wsUrl);
