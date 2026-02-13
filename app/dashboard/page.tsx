@@ -1,9 +1,8 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Shield, Cpu, MemoryStick, HardDrive } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
-import { useWebSocket } from '@/lib/websocket-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 
@@ -118,13 +117,9 @@ const StatusIndicator = ({ label, isOnline }: { label: string, isOnline: boolean
 
 export default function DashboardPage() {
   const { selectedAgent } = useAgent();
-  const { logs: wsLogs } = useWebSocket();
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>(mockAlerts);
   const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
   const supabase = createClient();
-  
-  // Use WebSocket logs if available, otherwise use mock logs
-  const logs = wsLogs.length > 0 ? wsLogs : mockLogs;
 
   useEffect(() => {
     if (!selectedAgent) {
@@ -188,14 +183,6 @@ export default function DashboardPage() {
     fetchAlerts();
   }, [selectedAgent, supabase]);
 
-  const recentLogs = useMemo(() => {
-    if (!selectedAgent) return [];
-    return logs
-      .filter(log => log.agent_id === selectedAgent.id)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 3); // ✅ only 3 logs
-  }, [logs, selectedAgent]);
-
   const cpu = Number(agentStats?.cpu_usage ?? 0);
   const ram = Number(agentStats?.ram_usage ?? 0);
   const storage = Number(agentStats?.storage_usage ?? 0);
@@ -252,22 +239,19 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent Logs */}
+        {/* Static Logs */}
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
           <h3 className="text-xl font-bold text-white mb-4">Recent Logs</h3>
           <div className="font-mono text-xs text-slate-400 space-y-2">
-            {recentLogs.map((log, index) => (
-              <div key={index} className="p-2 rounded hover:bg-slate-800/50">
+            {mockLogs.slice(0, 3).map((log) => (
+              <div key={log.id} className="p-2 rounded hover:bg-slate-800/50">
                 <p className="text-slate-500">
                   {new Date(log.timestamp).toLocaleString()}
                 </p>
-                <p className="text-cyan-400">{log.service}</p>
+                <p className="text-cyan-400">{log.type}</p>
                 <p className="text-slate-300">{log.message}</p>
               </div>
             ))}
-            {recentLogs.length === 0 && (
-              <p className="text-slate-500">No recent logs.</p>
-            )}
           </div>
         </div>
       </div>
