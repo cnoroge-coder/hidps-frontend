@@ -38,10 +38,15 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching agents:', error);
       setAgents([]);
     } else if (data) {
-      setAgents(data);
+      // Map data to include firewall_enabled field
+      const mappedAgents: Agent[] = data.map(agent => ({
+        ...agent,
+        firewall_enabled: (agent as any).firewall_enabled ?? false
+      }));
+      setAgents(mappedAgents);
       // Only set selected agent if there isn't one already or if current one is no longer in the list
-      if (!selectedAgent && data.length > 0) {
-        setSelectedAgent(data.length > 0 ? data[0] : null);
+      if (!selectedAgent && mappedAgents.length > 0) {
+        setSelectedAgent(mappedAgents.length > 0 ? mappedAgents[0] : null);
       }
     }
   };
