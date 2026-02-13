@@ -70,21 +70,14 @@ export default function FirewallPage() {
 
   const firewallEnabled = typedAgent?.firewall_enabled ?? false;
 
-  const handleToggleFirewall = async () => {
-    if (!typedAgent) return;
-    // This functionality likely requires sending a command to the agent via the backend.
-    // For now, we'll just update the optimistic UI state.
-    // const { error } = await supabase
-    //   .from('agent_stats')
-    //   .update({ firewall_enabled: !firewallEnabled })
-    //   .eq('agent_id', selectedAgent.id);
-    // if (error) {
-    //   console.error('Error toggling firewall:', error);
-    // }
-    sendCommand(selectedAgent.id, "toggle_firewall", { 
-      enabled: !firewallEnabled 
-    });
-  };
+const handleToggleFirewall = async () => {
+  if (!selectedAgent) return;
+
+  // Use optional chaining or typed variable for safety
+  sendCommand(selectedAgent.id, "toggle_firewall", {  // ← TS now knows it's not null here
+    enabled: !firewallEnabled
+  });
+};
 
   const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) => {
     if (policyType === 'incoming') setDefaultIncoming(value);
