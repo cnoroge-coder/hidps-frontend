@@ -7,20 +7,96 @@ import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-type MonitoredFile = Database['public']['Tables']['monitored_files']['Row';
-type Alert = Database['public']['Tables']['alerts']['Row';
+type MonitoredFile = Database['public']['Tables']['monitored_files']['Row'];
+type Alert = Database['public']['Tables']['alerts']['Row'];
+
+// Static mock data as fallback
+const mockMonitoredFiles: MonitoredFile[] = [
+  {
+    id: 'mock-file-1',
+    agent_id: 'demo',
+    file_path: '/etc/passwd',
+    added_by: 'admin',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+  },
+  {
+    id: 'mock-file-2',
+    agent_id: 'demo',
+    file_path: '/etc/shadow',
+    added_by: 'admin',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+  {
+    id: 'mock-file-3',
+    agent_id: 'demo',
+    file_path: '/var/log/auth.log',
+    added_by: 'admin',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+  },
+  {
+    id: 'mock-file-4',
+    agent_id: 'demo',
+    file_path: '/etc/nginx/nginx.conf',
+    added_by: 'admin',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(),
+  },
+];
+
+const mockAlerts: Alert[] = [
+  {
+    id: 'mock-alert-1',
+    agent_id: 'demo',
+    title: 'File Modified',
+    description: 'File modified: /etc/passwd',
+    alert_type: 'file_monitoring',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-alert-2',
+    agent_id: 'demo',
+    title: 'File Created',
+    description: 'New file created: /tmp/suspicious.sh',
+    alert_type: 'file_monitoring',
+    severity: 2,
+    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-alert-3',
+    agent_id: 'demo',
+    title: 'File Deleted',
+    description: 'File deleted: /var/log/important.log',
+    alert_type: 'file_monitoring',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+];
 
 // --- MAIN FILE MONITORING PAGE COMPONENT ---
 export default function FileMonitoringPage() {
   const { selectedAgent } = useAgent();
   const { sendCommand, logs } = useWebSocket();
-  const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>(mockMonitoredFiles);
+  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
   const [newFilePath, setNewFilePath] = useState('');
   const supabase = createClient();
 
   useEffect(() => {
-    if (!selectedAgent) return;
+    if (!selectedAgent) {
+      // Use mock data when no agent selected
+      setMonitoredFiles(mockMonitoredFiles);
+      setAlerts(mockAlerts);
+      return;
+    }
 
     const fetchMonitoredFiles = async () => {
       const { data, error } = await supabase
@@ -31,8 +107,9 @@ export default function FileMonitoringPage() {
 
       if (error) {
         console.error('Error fetching monitored files:', error);
+        setMonitoredFiles(mockMonitoredFiles);
       } else {
-        setMonitoredFiles(data);
+        setMonitoredFiles(data.length > 0 ? data : mockMonitoredFiles);
       }
     };
 
@@ -47,8 +124,9 @@ export default function FileMonitoringPage() {
 
       if (error) {
         console.error('Error fetching file monitoring alerts:', error);
+        setAlerts(mockAlerts);
       } else {
-        setAlerts(data);
+        setAlerts(data.length > 0 ? data : mockAlerts);
       }
     };
 

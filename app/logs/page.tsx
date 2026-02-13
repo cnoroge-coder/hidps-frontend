@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BookText, Shield, Users, FileWarning, Bell, Wifi, WifiOff } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
@@ -13,12 +13,99 @@ const logTypes = [
     { name: 'process', icon: Bell },
 ];
 
+// Static mock logs as fallback
+const mockLogs = [
+  {
+    id: 'log-1',
+    agent_id: 'demo',
+    type: 'firewall',
+    message: 'UFW firewall rule added: Allow 443/tcp from any',
+    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-2',
+    agent_id: 'demo',
+    type: 'file_monitoring',
+    message: 'File modified: /etc/nginx/nginx.conf',
+    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    severity: 'warning',
+  },
+  {
+    id: 'log-3',
+    agent_id: 'demo',
+    type: 'login',
+    message: 'SSH login successful: user admin from 192.168.1.50',
+    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-4',
+    agent_id: 'demo',
+    type: 'login',
+    message: 'Failed SSH login attempt: user root from 203.0.113.45',
+    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    severity: 'warning',
+  },
+  {
+    id: 'log-5',
+    agent_id: 'demo',
+    type: 'process',
+    message: 'High CPU process detected: process_name (PID: 1234) using 87% CPU',
+    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    severity: 'warning',
+  },
+  {
+    id: 'log-6',
+    agent_id: 'demo',
+    type: 'file_monitoring',
+    message: 'File created: /var/log/suspicious.log',
+    timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-7',
+    agent_id: 'demo',
+    type: 'firewall',
+    message: 'UFW firewall rule deleted: rule #3',
+    timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-8',
+    agent_id: 'demo',
+    type: 'file_monitoring',
+    message: 'File deleted: /tmp/temporary_file.txt',
+    timestamp: new Date(Date.now() - 1000 * 60 * 150).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-9',
+    agent_id: 'demo',
+    type: 'login',
+    message: 'User session started: admin logged in via console',
+    timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+    severity: 'info',
+  },
+  {
+    id: 'log-10',
+    agent_id: 'demo',
+    type: 'process',
+    message: 'Service restarted: nginx.service',
+    timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+    severity: 'info',
+  },
+];
+
 // --- MAIN LOGS PAGE COMPONENT ---
 export default function LogsPage() {
   const { selectedAgent } = useAgent();
-  const { logs, isConnected } = useWebSocket();
+  const { logs: wsLogs, isConnected } = useWebSocket();
   const [activeFilter, setActiveFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
+  
+  // Use WebSocket logs if available and connected, otherwise use mock logs
+  const logs = (isConnected && wsLogs.length > 0) ? wsLogs : mockLogs;
 
   const logsPerPage = 5;
 

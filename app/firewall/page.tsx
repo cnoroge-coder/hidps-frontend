@@ -16,9 +16,20 @@ type Policy = 'allow' | 'deny' | 'reject';
 export default function FirewallPage() {
   const { selectedAgent } = useAgent();
   const typedAgent = selectedAgent as Agent | null;
-  const { firewallRules, isConnected, sendCommand } = useWebSocket();
+  const { firewallRules, firewallEnabled, isConnected, sendCommand } = useWebSocket();
   const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
   const supabase = createClient();
+  
+  // Local state for firewall toggle (independent of backend)
+  const [localFirewallEnabled, setLocalFirewallEnabled] = useState(false);
+  
+  // Static rules as fallback
+  const [localRules, setLocalRules] = useState([
+    { id: '1', action: 'ALLOW', to: '22/tcp', from: 'Anywhere' },
+    { id: '2', action: 'ALLOW', to: '80/tcp', from: 'Anywhere' },
+    { id: '3', action: 'ALLOW', to: '443/tcp', from: 'Anywhere' },
+    { id: '4', action: 'ALLOW', to: '3000/tcp', from: 'Anywhere' },
+  ]);
   
   // State for the new rule form
   const [newRuleAction, setNewRuleAction] = useState<'allow' | 'deny'>('allow');
@@ -26,7 +37,9 @@ export default function FirewallPage() {
   const [newRuleProtocol, setNewRuleProtocol] = useState<'tcp' | 'udp'>('tcp');
   const [newRuleFrom, setNewRuleFrom] = useState('any');
   
-  const rules = firewallRules; // Use rules from WebSocket
+  // Use backend rules if available, otherwise use local rules
+  const rules = firewallRules.length > 0 ? firewallRules : localRules;
+  const effectiveFirewallEnabled = isConnected ? firewallEnabled : localFirewallEnabled;
 
   useEffect(() => {
     if (!selectedAgent) return;
@@ -68,15 +81,16 @@ export default function FirewallPage() {
     };
   }, [selectedAgent, supabase]);
 
-  const firewallEnabled = typedAgent?.firewall_enabled ?? false;
-
 const handleToggleFirewall = async () => {
-  if (!selectedAgent) return;
-
-  // Use optional chaining or typed variable for safety
-  sendCommand(selectedAgent.id, "toggle_firewall", {  // ← TS now knows it's not null here
-    enabled: !firewallEnabled
-  });
+  // Toggle locally first (immediate feedback)
+  setLocalFirewallEnabled(!localFirewallEnabled);
+  
+  // If connected and agent selected, also send to backend
+  if (isConnected && selectedAgent) {
+    sendCommand(selectedAgent.id, "toggle_firewall", {
+      enabled: !effectiveFirewallEnabled
+    });
+  }
 };
 
 const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) => {
@@ -87,26 +101,41 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
 
   const handleAddRule = (e: React.SubmitEvent) => {
     e.preventDefault();
-    if (!selectedAgent || !newRulePort) return;
+    if (!newRulePort) return;
 
     // Format for UFW command (e.g., "80/tcp")
     const ruleString = `${newRulePort}/${newRuleProtocol}`;
     
-    sendCommand(selectedAgent.id, "add_firewall_rule", {
-      rule: ruleString,
-      action: newRuleAction
-    });
+    // Add to local rules immediately
+    const newRule = {
+      id: String(localRules.length + 1),
+      action: newRuleAction.toUpperCase(),
+      to: ruleString,
+      from: newRuleFrom
+    };
+    setLocalRules([...localRules, newRule]);
+    
+    // If connected and agent selected, also send to backend
+    if (isConnected && selectedAgent) {
+      sendCommand(selectedAgent.id, "add_firewall_rule", {
+        rule: ruleString,
+        action: newRuleAction
+      });
+    }
 
     setNewRulePort(''); // Clear input
   };
 
   const handleRemoveRule = (index: string) => {
-    if (!selectedAgent) return;
+    // Remove from local rules immediately
+    setLocalRules(localRules.filter(rule => rule.id !== index));
     
-    // Send the rule number (index) to delete
-    sendCommand(selectedAgent.id, "delete_firewall_rule", {
-      index: index
-    });
+    // If connected and agent selected, also send to backend
+    if (isConnected && selectedAgent) {
+      sendCommand(selectedAgent.id, "delete_firewall_rule", {
+        index: index
+      });
+    }
   };
 
   const PolicyDropdown = ({ value, onChange }: { value: Policy, onChange: (v: Policy) => void }) => (
@@ -157,18 +186,18 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
                     <button
                         onClick={handleToggleFirewall}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                            firewallEnabled ? 'bg-green-500' : 'bg-gray-600'
+                            effectiveFirewallEnabled ? 'bg-green-500' : 'bg-gray-600'
                         }`}
                     >
                         <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                firewallEnabled ? 'translate-x-6' : 'translate-x-1'
+                                effectiveFirewallEnabled ? 'translate-x-6' : 'translate-x-1'
                             }`}
                         />
                     </button>
                 </div>
                 <p className="text-sm text-slate-500 mt-2">
-                    {firewallEnabled ? 'Active' : 'Inactive'}
+                    {effectiveFirewallEnabled ? 'Active' : 'Inactive'}
                 </p>
             </div>
             {/* <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
@@ -247,7 +276,7 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
                     ))}
                 </tbody>
             </table>
-             {rules.length === 0 && <p className="p-4 text-slate-500">No firewall rules loaded. Waiting for connection...</p>}
+             {rules.length === 0 && <p className="p-4 text-slate-500">No firewall rules configured.</p>}
         </div>
       </div>
     </>

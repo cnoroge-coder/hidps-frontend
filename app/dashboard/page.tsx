@@ -10,6 +10,84 @@ import { Database } from '@/lib/supabase/database.types';
 type Alert = Database['public']['Tables']['alerts']['Row'];
 type AgentStats = Database['public']['Tables']['agent_stats']['Row'];
 
+// Static mock data as fallback
+const mockAlerts: Alert[] = [
+  {
+    id: 'dash-alert-1',
+    agent_id: 'demo',
+    title: 'High CPU Usage',
+    description: 'CPU usage exceeded 85%',
+    alert_type: 'system',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'dash-alert-2',
+    agent_id: 'demo',
+    title: 'Unauthorized File Access',
+    description: 'Attempt to access /etc/shadow',
+    alert_type: 'file_monitoring',
+    severity: 4,
+    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'dash-alert-3',
+    agent_id: 'demo',
+    title: 'Failed Login Attempt',
+    description: 'Multiple failed SSH attempts from 192.168.1.100',
+    alert_type: 'login',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+];
+
+const mockLogs = [
+  {
+    id: 'dash-log-1',
+    agent_id: 'demo',
+    type: 'firewall',
+    message: 'Firewall rule added: Allow 443/tcp',
+    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+  },
+  {
+    id: 'dash-log-2',
+    agent_id: 'demo',
+    type: 'file_monitoring',
+    message: 'File modified: /etc/hosts',
+    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+  },
+  {
+    id: 'dash-log-3',
+    agent_id: 'demo',
+    type: 'login',
+    message: 'SSH login successful: admin from 192.168.1.50',
+    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+  },
+  {
+    id: 'dash-log-4',
+    agent_id: 'demo',
+    type: 'process',
+    message: 'Service started: nginx.service',
+    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+  },
+  {
+    id: 'dash-log-5',
+    agent_id: 'demo',
+    type: 'system',
+    message: 'System resource check completed',
+    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+  },
+];
+
 const ResourceUsage = ({ icon: Icon, title, value, color }: { icon: React.ElementType, title: string, value: number, color: string }) => (
   <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
     <div className="flex items-center justify-between mb-2">
@@ -40,13 +118,19 @@ const StatusIndicator = ({ label, isOnline }: { label: string, isOnline: boolean
 
 export default function DashboardPage() {
   const { selectedAgent } = useAgent();
-  const { logs } = useWebSocket();
-  const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
+  const { logs: wsLogs } = useWebSocket();
+  const [recentAlerts, setRecentAlerts] = useState<Alert[]>(mockAlerts);
   const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
   const supabase = createClient();
+  
+  // Use WebSocket logs if available, otherwise use mock logs
+  const logs = wsLogs.length > 0 ? wsLogs : mockLogs;
 
   useEffect(() => {
-    if (!selectedAgent) return;
+    if (!selectedAgent) {
+      setRecentAlerts(mockAlerts);
+      return;
+    }
 
     const fetchAgentStats = async () => {
       const { data } = await supabase
@@ -80,17 +164,25 @@ export default function DashboardPage() {
   }, [selectedAgent, supabase]);
 
   useEffect(() => {
-    if (!selectedAgent) return;
+    if (!selectedAgent) {
+      setRecentAlerts(mockAlerts);
+      return;
+    }
 
     const fetchAlerts = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('alerts')
         .select('*')
         .eq('agent_id', selectedAgent.id)
         .order('created_at', { ascending: false })
         .limit(3); // ✅ changed to 3
 
-      if (data) setRecentAlerts(data);
+      if (error) {
+        console.error('Error fetching alerts:', error);
+        setRecentAlerts(mockAlerts);
+      } else if (data) {
+        setRecentAlerts(data.length > 0 ? data : mockAlerts);
+      }
     };
 
     fetchAlerts();

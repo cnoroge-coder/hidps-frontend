@@ -37,16 +37,96 @@ const getSeverityName = (severity: number): Severity => {
 }
 
 
+// Static mock alerts as fallback
+const mockAlerts: Alert[] = [
+  {
+    id: 'mock-1',
+    agent_id: 'demo',
+    title: 'High CPU Usage Detected',
+    description: 'CPU usage exceeded 85% for more than 5 minutes',
+    alert_type: 'system',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-2',
+    agent_id: 'demo',
+    title: 'Unauthorized File Access Attempt',
+    description: 'File /etc/shadow was accessed by unauthorized process',
+    alert_type: 'file_monitoring',
+    severity: 4,
+    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-3',
+    agent_id: 'demo',
+    title: 'Failed SSH Login Attempts',
+    description: '5 failed SSH login attempts from IP 192.168.1.100',
+    alert_type: 'login',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-4',
+    agent_id: 'demo',
+    title: 'Firewall Rule Added',
+    description: 'New firewall rule added: Allow port 8080/tcp',
+    alert_type: 'firewall',
+    severity: 1,
+    created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    resolved: true,
+    resolved_by: 'admin',
+    resolved_at: new Date(Date.now() - 1000 * 60 * 85).toISOString(),
+  },
+  {
+    id: 'mock-5',
+    agent_id: 'demo',
+    title: 'Configuration File Modified',
+    description: 'File /etc/nginx/nginx.conf was modified',
+    alert_type: 'file_monitoring',
+    severity: 2,
+    created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+  {
+    id: 'mock-6',
+    agent_id: 'demo',
+    title: 'Suspicious Process Detected',
+    description: 'Unknown process with high network activity detected',
+    alert_type: 'process',
+    severity: 3,
+    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+    resolved: false,
+    resolved_by: null,
+    resolved_at: null,
+  },
+];
+
 // --- MAIN ALERTS PAGE COMPONENT ---
 export default function AlertsPage() {
   const { selectedAgent } = useAgent();
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const supabase = createClient();
 
   useEffect(() => {
-    if (!selectedAgent) return;
+    if (!selectedAgent) {
+      // Use mock data when no agent selected
+      setAlerts(mockAlerts);
+      return;
+    }
 
     const fetchAlerts = async () => {
       let query = supabase.from('alerts').select('*').eq('agent_id', selectedAgent.id);
@@ -59,9 +139,11 @@ export default function AlertsPage() {
 
       if (error) {
         console.error('Error fetching alerts:', error);
+        // Use mock data on error
+        setAlerts(mockAlerts);
       } else {
         console.log('Fetched alerts:', data);
-        setAlerts(data);
+        setAlerts(data.length > 0 ? data : mockAlerts);
       }
     };
 

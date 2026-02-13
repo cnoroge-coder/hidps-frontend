@@ -13,6 +13,7 @@ import { createBrowserClient } from "@supabase/ssr";
 interface WebSocketContextType {
   logs: any[];
   firewallRules: any[];
+  firewallEnabled: boolean;
   isConnected: boolean;
   sendCommand: (agentId: string, command: string, payload: any) => void; // New helper
 }
@@ -26,6 +27,7 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<any[]>([]);
   const [firewallRules, setFirewallRules] = useState<any[]>([]);
+  const [firewallEnabled, setFirewallEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [socket, setSocket] = useState<WebSocket | null>(null); // Store socket instance
@@ -72,6 +74,19 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
         if (message.type === "firewall_sync" || message.type === "firewall_rules_updated") {
           setFirewallRules(message.rules);
+          if (message.enabled !== undefined) {
+            setFirewallEnabled(message.enabled);
+          }
+        }
+
+        if (message.type === "agent_report") {
+          // Update firewall status from agent reports
+          if (message.data?.firewall_enabled !== undefined) {
+            setFirewallEnabled(message.data.firewall_enabled);
+          }
+          if (message.data?.firewall_rules) {
+            setFirewallRules(message.data.firewall_rules);
+          }
         }
 
         if (message.type === "log_stream") {
@@ -115,6 +130,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const value = {
     logs,
     firewallRules,
+    firewallEnabled,
     isConnected,
     sendCommand
   };
