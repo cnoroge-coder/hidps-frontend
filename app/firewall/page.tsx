@@ -36,11 +36,11 @@ export default function FirewallPage() {
         .from('agent_stats')
         .select('*')
         .eq('agent_id', selectedAgent.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching agent stats:', error);
-      } else {
+      } else if (data) {
         setAgentStats(data);
       }
     };
