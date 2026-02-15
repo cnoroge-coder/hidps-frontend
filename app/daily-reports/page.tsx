@@ -22,6 +22,7 @@ export default function DailyReportsPage() {
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -135,7 +136,7 @@ export default function DailyReportsPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex">
-        <Sidebar />
+        <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
         <div className="flex-1 p-8">
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
@@ -147,7 +148,7 @@ export default function DailyReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex">
-      <Sidebar />
+      <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />
       <div className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
