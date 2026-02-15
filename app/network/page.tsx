@@ -54,7 +54,7 @@ export default function NetworkPage() {
 
     const fetchEvents = async () => {
       const { data, error } = await supabase
-        .from('alerts')
+        .from('events')
         .select('*')
         .eq('agent_id', selectedAgent.id)
         .in('alert_type', ['ssh_brute_force', 'port_scan', 'auth_success', 'auth_failure', 'auth_info'])
@@ -82,7 +82,7 @@ export default function NetworkPage() {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'alerts',
+          table: 'events',
           filter: `agent_id=eq.${selectedAgent.id}`,
         },
         (payload: RealtimePostgresChangesPayload<Alert>) => {
