@@ -55,7 +55,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   
 
     // UPDATE: Your Render Host
-    const BACKEND_WS_URL = process.env.NEXT_PUBLIC_BACKEND_WS_URL || 'wss://hidps-backend-gi76.onrender.com';
+    const BACKEND_WS_URL = process.env.NEXT_PUBLIC_BACKEND_WS_URL || 'wss://hidps-backend.onrender.com';
     const wsUrl = `${BACKEND_WS_URL}?user_id=${userId}`;
 
     const ws = new WebSocket(wsUrl);
