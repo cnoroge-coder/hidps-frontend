@@ -46,7 +46,6 @@ export default function LogsPage() {
   const [totalAlerts, setTotalAlerts] = useState(0);
   const itemsPerPage = 12;
   const supabase = createClient();
-  );
 
   useEffect(() => {
     if (!selectedAgent) return;
