@@ -85,7 +85,7 @@ export default function NetworkPage() {
         },
         (payload: RealtimePostgresChangesPayload<Alert>) => {
           const newEvent = payload.new;
-          if (newEvent && ['ssh_brute_force', 'port_scan', 'auth_success', 'auth_failure', 'auth_info'].includes(newEvent.alert_type || '')) {
+          if (newEvent && 'alert_type' in newEvent && ['ssh_brute_force', 'port_scan', 'auth_success', 'auth_failure', 'auth_info'].includes(newEvent.alert_type || '')) {
             setEvents(prev => [newEvent, ...prev]);
             setLiveEvents(prev => [newEvent, ...prev.slice(0, 9)]); // Keep last 10 live events
           }
