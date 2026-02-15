@@ -13,6 +13,7 @@ import { createBrowserClient } from "@supabase/ssr";
 interface WebSocketContextType {
   logs: any[];
   firewallRules: any[];
+  securityAlerts: any[];
   isConnected: boolean;
   sendCommand: (agentId: string, command: string, payload: any) => void; // New helper
 }
@@ -26,6 +27,7 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<any[]>([]);
   const [firewallRules, setFirewallRules] = useState<any[]>([]);
+  const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [socket, setSocket] = useState<WebSocket | null>(null); // Store socket instance
@@ -77,6 +79,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           setLogs((prevLogs) => [message.log, ...prevLogs]);
         }
 
+        if (message.type === "security_alert") {
+          setSecurityAlerts((prevAlerts) => [message.alert, ...prevAlerts]);
+        }
+
         if (message.type === "firewall_rules") {
           setFirewallRules(message.data);
         }
@@ -114,6 +120,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const value = {
     logs,
     firewallRules,
+    securityAlerts,
     isConnected,
     sendCommand
   };
