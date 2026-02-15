@@ -62,6 +62,9 @@ export default function FileMonitoringPage() {
   const { logs, sendCommand } = useWebSocket(); // ADD sendCommand here
   const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>([]);
   const [newFilePath, setNewFilePath] = useState('');
+  const [dbAlerts, setDbAlerts] = useState<any[]>([]);
+  const supabase = createClient();
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -89,52 +92,40 @@ export default function FileMonitoringPage() {
       }
     };
 
-    fetchMonitoredFiles();
+    const fetchFileAlerts = async () => {
+      const { data, error } = await supabase
+        .from('alerts')
+        .select('*')
+        .eq('agent_id', selectedAgent.id)
+        .eq('alert_type', 'file_monitoring')
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-    // Set up real-time subscription
-    const channel = supabase
-      .channel(`monitored_files:agent_id=eq.${selectedAgent.id}`)
-      .on<MonitoredFile>(
+      if (error) {
+        console.error('Error fetching file alerts:', error);
+      } else {
+        setDbAlerts(data || []);
+      }
+    };
+
+    fetchMonitoredFiles();
+    fetchFileAlerts();
+
+    // Set up real-time subscription for alerts
+    const alertsChannel = supabase
+      .channel(`file_alerts:agent_id=eq.${selectedAgent.id}`)
+      .on<Database['public']['Tables']['alerts']['Row']>(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'monitored_files',
+          table: 'alerts',
           filter: `agent_id=eq.${selectedAgent.id}`,
         },
-        (payload: RealtimePostgresChangesPayload<MonitoredFile>) => {
-          console.log('New file inserted:', payload.new);
-          setMonitoredFiles((current : any) => [payload.new, ...current]);
-        }
-      )
-      .on<MonitoredFile>(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'monitored_files',
-          filter: `agent_id=eq.${selectedAgent.id}`,
-        },
-        (payload: RealtimePostgresChangesPayload<MonitoredFile>) => {
-          console.log('File deleted:', payload.old);
-          setMonitoredFiles((current : any) => 
-            current.filter((f : any) => f.id !== (payload.old as any).id)
-          );
-        }
-      )
-      .on<MonitoredFile>(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'monitored_files',
-          filter: `agent_id=eq.${selectedAgent.id}`,
-        },
-        (payload: RealtimePostgresChangesPayload<MonitoredFile>) => {
-          console.log('File updated:', payload.new);
-          setMonitoredFiles((current : any) =>
-            current.map((f : any) => (f.id === (payload.new as any).id ? payload.new : f))
-          );
+        (payload: RealtimePostgresChangesPayload<Database['public']['Tables']['alerts']['Row']>) => {
+          if (payload.new.alert_type === 'file_monitoring') {
+            setDbAlerts((current : any) => [payload.new, ...current.slice(0, 19)]);
+          }
         }
       )
       .subscribe();
@@ -142,6 +133,7 @@ export default function FileMonitoringPage() {
     // Cleanup subscription on unmount or when selectedAgent changes
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(alertsChannel);
     };
   }, [selectedAgent, supabase, sendCommand]); // Add sendCommand to dependencies
 
@@ -190,7 +182,7 @@ export default function FileMonitoringPage() {
   };
 
   // Filter logs for file monitoring events for this agent
-  const fileLogs = selectedAgent 
+  const websocketLogs = selectedAgent 
     ? logs
         .filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring')
         .map(log => ({
@@ -198,8 +190,33 @@ export default function FileMonitoringPage() {
           parsed: parseFileLogMessage(log.message)
         }))
         .filter(log => log.parsed !== null) // Remove unparseable or temp file logs
-        .slice(0, 10) // Show last 10 file events
+        .slice(0, 10) // Show last 10 real-time events
     : [];
+
+  // Convert database alerts to log format
+  const dbLogs = dbAlerts.map(alert => ({
+    timestamp: alert.created_at,
+    agent_id: alert.agent_id,
+    type: 'file_monitoring',
+    message: alert.message,
+    parsed: parseFileLogMessage(alert.message)
+  })).filter(log => log.parsed !== null);
+
+  // Combine and deduplicate logs (prefer real-time over database)
+  const allLogs = [...websocketLogs];
+  const existingMessages = new Set(websocketLogs.map(log => log.message));
+  
+  // Add database logs that aren't already in real-time logs
+  for (const dbLog of dbLogs) {
+    if (!existingMessages.has(dbLog.message)) {
+      allLogs.push(dbLog);
+    }
+  }
+
+  // Sort by timestamp (newest first) and limit
+  const fileLogs = allLogs
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 20);
 
   return (
     <>
