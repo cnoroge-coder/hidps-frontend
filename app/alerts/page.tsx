@@ -14,7 +14,7 @@ type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
 const alertTypes = [
     { name: 'All', dbTypes: [], icon: Bell },
     { name: 'Firewall', dbTypes: ['firewall', 'network'], icon: Shield },
-    { name: 'Login', dbTypes: ['login', 'security'], icon: Users },
+    { name: 'Login', dbTypes: ['auth_success', 'auth_failure', 'ssh_brute_force'], icon: Users },
     { name: 'File Monitoring', dbTypes: ['file_monitoring', 'integrity'], icon: FileWarning },
     { name: 'Process', dbTypes: ['process', 'privilege_escalation'], icon: Bell },
 ];

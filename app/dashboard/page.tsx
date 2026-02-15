@@ -6,7 +6,6 @@ import { useAgent } from '@/lib/agent-context';
 import { useWebSocket } from '@/lib/websocket-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
-import DailyReportsWidget from '@/components/DailyReportsWidget';
 
 type Alert = Database['public']['Tables']['alerts']['Row'];
 type AgentStats = Database['public']['Tables']['agent_stats']['Row'];
@@ -180,10 +179,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Daily Reports - REPLACED WITH WIDGET */}
-        {selectedAgent && (
+        {/* Daily Reports - MOVED TO SEPARATE PAGE */}
+        {/* {selectedAgent && (
           <DailyReportsWidget agentId={selectedAgent.id} />
-        )}
+        )} */}
       </div>
     </>
   );

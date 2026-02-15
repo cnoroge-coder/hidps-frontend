@@ -18,6 +18,7 @@ import {
   FileWarning,
   UserCircle,
   Network,
+  Calendar,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '../lib/supabase/client';
@@ -28,6 +29,7 @@ const navItems = [
     { href: '/alerts', icon: Bell, label: 'Alerts' },
     { href: '/network', icon: Network, label: 'Network' },
     { href: '/logs', icon: BookText, label: 'Logs' },
+    { href: '/daily-reports', icon: Calendar, label: 'Daily Reports' },
     { href: '/firewall', icon: Shield, label: 'Firewall' },
     { href: '/file-monitoring', icon: FileWarning, label: 'File Monitoring' },
   ];
