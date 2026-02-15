@@ -1,45 +1,33 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Shield, ShieldOff, Plus, Trash2, ChevronDown, Wifi, WifiOff } from 'lucide-react';
+import { Shield, ShieldOff, Plus, Trash2, ChevronDown, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { useWebSocket } from '@/lib/websocket-context';
-import { Agent } from '@/lib/agent-context';  // adjust if path differs
 
 type AgentStats = Database['public']['Tables']['agent_stats']['Row'];
+type Agent = Database['public']['Tables']['agents']['Row'];
 
 type Policy = 'allow' | 'deny' | 'reject';
 
 // --- MAIN FIREWALL PAGE COMPONENT ---
 export default function FirewallPage() {
   const { selectedAgent } = useAgent();
-  const typedAgent = selectedAgent as Agent | null;
-  const { firewallRules, firewallEnabled, isConnected, sendCommand } = useWebSocket();
+  const { firewallRules, isConnected, sendCommand } = useWebSocket();
   const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
+  const [localFirewallEnabled, setLocalFirewallEnabled] = useState<boolean | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
   const supabase = createClient();
-  
-  // Local state for firewall toggle (independent of backend)
-  const [localFirewallEnabled, setLocalFirewallEnabled] = useState(false);
-  
-  // Static rules as fallback
-  const [localRules, setLocalRules] = useState([
-    { id: '1', action: 'ALLOW', to: '22/tcp', from: 'Anywhere' },
-    { id: '2', action: 'ALLOW', to: '80/tcp', from: 'Anywhere' },
-    { id: '3', action: 'ALLOW', to: '443/tcp', from: 'Anywhere' },
-    { id: '4', action: 'ALLOW', to: '3000/tcp', from: 'Anywhere' },
-  ]);
   
   // State for the new rule form
   const [newRuleAction, setNewRuleAction] = useState<'allow' | 'deny'>('allow');
   const [newRulePort, setNewRulePort] = useState('');
   const [newRuleProtocol, setNewRuleProtocol] = useState<'tcp' | 'udp'>('tcp');
   const [newRuleFrom, setNewRuleFrom] = useState('any');
-  
-  // Use backend rules if available, otherwise use local rules
-  const rules = firewallRules.length > 0 ? firewallRules : localRules;
-  const effectiveFirewallEnabled = isConnected ? firewallEnabled : localFirewallEnabled;
+
+  const rules = firewallRules; // Use rules from WebSocket
 
   useEffect(() => {
     if (!selectedAgent) return;
@@ -49,18 +37,19 @@ export default function FirewallPage() {
         .from('agent_stats')
         .select('*')
         .eq('agent_id', selectedAgent.id)
-        .maybeSingle();
+        .single();
 
       if (error) {
         console.error('Error fetching agent stats:', error);
-      } else if (data) {
+      } else {
         setAgentStats(data);
       }
     };
 
     fetchAgentStats();
 
-    const channel = supabase
+    // Subscribe to agent_stats changes
+    const statsChannel = supabase
       .channel(`agent_stats:agent_id=eq.${selectedAgent.id}`)
       .on<AgentStats>(
         'postgres_changes',
@@ -72,70 +61,79 @@ export default function FirewallPage() {
         },
         (payload) => {
           setAgentStats(payload.new as AgentStats);
+          // Clear loading when agent reports back
+          setIsToggling(false);
+        }
+      )
+      .subscribe();
+
+    // Subscribe to agents table for firewall_enabled changes (this is what backend updates!)
+    const agentsChannel = supabase
+      .channel(`agents:id=eq.${selectedAgent.id}`)
+      .on<Agent>(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'agents',
+          filter: `id=eq.${selectedAgent.id}`,
+        },
+        (payload) => {
+          const newAgent = payload.new as any;
+          console.log('Agent firewall status updated:', newAgent.firewall_enabled);
+          setLocalFirewallEnabled(newAgent.firewall_enabled ?? false);
+          // Clear loading immediately when firewall status changes
+          setIsToggling(false);
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(statsChannel);
+      supabase.removeChannel(agentsChannel);
     };
   }, [selectedAgent, supabase]);
 
-const handleToggleFirewall = async () => {
-  // Toggle locally first (immediate feedback)
-  setLocalFirewallEnabled(!localFirewallEnabled);
+  // Use local state if available (from realtime), otherwise fall back to selectedAgent
+  const firewallEnabled = localFirewallEnabled ?? selectedAgent?.firewall_enabled ?? false;
   
-  // If connected and agent selected, also send to backend
-  if (isConnected && selectedAgent) {
-    sendCommand(selectedAgent.id, "toggle_firewall", {
-      enabled: !effectiveFirewallEnabled
-    });
-  }
-};
+  const handleToggleFirewall = async () => {
+    if (!selectedAgent) return;
 
-const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) => {
-  // Policy dropdowns are disabled — log only for now
-  console.log(`Default ${policyType} policy changed to ${value} (not applied yet)`);
-  // TODO: sendCommand(selectedAgent.id, "set_policy", { type: policyType, value });
-};
+    const newState = !firewallEnabled;
+    setIsToggling(true);
+
+    // Send command to agent
+    sendCommand(selectedAgent.id, "toggle_firewall", { 
+      enabled: newState 
+    });
+
+    // Safety timeout - clear after 5 seconds if agent doesn't respond
+    setTimeout(() => setIsToggling(false), 5000);
+  };
 
   const handleAddRule = (e: React.SubmitEvent) => {
     e.preventDefault();
-    if (!newRulePort) return;
+    if (!selectedAgent || !newRulePort) return;
 
     // Format for UFW command (e.g., "80/tcp")
     const ruleString = `${newRulePort}/${newRuleProtocol}`;
     
-    // Add to local rules immediately
-    const newRule = {
-      id: String(localRules.length + 1),
-      action: newRuleAction.toUpperCase(),
-      to: ruleString,
-      from: newRuleFrom
-    };
-    setLocalRules([...localRules, newRule]);
-    
-    // If connected and agent selected, also send to backend
-    if (isConnected && selectedAgent) {
-      sendCommand(selectedAgent.id, "add_firewall_rule", {
-        rule: ruleString,
-        action: newRuleAction
-      });
-    }
+    sendCommand(selectedAgent.id, "add_firewall_rule", {
+      rule: ruleString,
+      action: newRuleAction
+    });
 
     setNewRulePort(''); // Clear input
   };
 
   const handleRemoveRule = (index: string) => {
-    // Remove from local rules immediately
-    setLocalRules(localRules.filter(rule => rule.id !== index));
+    if (!selectedAgent) return;
     
-    // If connected and agent selected, also send to backend
-    if (isConnected && selectedAgent) {
-      sendCommand(selectedAgent.id, "delete_firewall_rule", {
-        index: index
-      });
-    }
+    // Send the rule number (index) to delete
+    sendCommand(selectedAgent.id, "delete_firewall_rule", {
+      index: index
+    });
   };
 
   const PolicyDropdown = ({ value, onChange }: { value: Policy, onChange: (v: Policy) => void }) => (
@@ -181,23 +179,29 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
                 <h3 className="text-lg font-semibold text-white mb-4">Firewall Status</h3>
-                <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Firewall</span>
-                    <button
-                        onClick={handleToggleFirewall}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                            effectiveFirewallEnabled ? 'bg-green-500' : 'bg-gray-600'
-                        }`}
-                    >
-                        <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                effectiveFirewallEnabled ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                        />
-                    </button>
-                </div>
-                <p className="text-sm text-slate-500 mt-2">
-                    {effectiveFirewallEnabled ? 'Active' : 'Inactive'}
+                <button 
+                    onClick={handleToggleFirewall}
+                    disabled={!isConnected || isToggling}
+                    className={`w-full flex items-center justify-center gap-3 py-3 rounded-lg font-semibold transition-colors ${
+                        firewallEnabled
+                            ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                            : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                    } ${(!isConnected || isToggling) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    {isToggling ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        {firewallEnabled ? <Shield size={20} /> : <ShieldOff size={20} />}
+                        {firewallEnabled ? 'Active' : 'Inactive'}
+                      </>
+                    )}
+                </button>
+                <p className="text-xs text-slate-600 mt-2 text-center">
+                   Debug: {firewallEnabled ? 'Enabled' : 'Disabled'}
                 </p>
             </div>
             {/* <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
@@ -268,7 +272,7 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
                             <td className="p-4 font-mono">{rule.to}</td> {/* UFW parsed 'to' */}
                             <td className="p-4 font-mono">{rule.from}</td> {/* UFW parsed 'from' */}
                             <td className="p-4 text-right">
-                              <button onClick={() => handleRemoveRule(rule.id)} className="...">
+                              <button onClick={() => handleRemoveRule(rule.id)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-full">
                                 <Trash2 size={16}/>
                               </button>
                             </td>
@@ -276,7 +280,7 @@ const handlePolicyChange = (policyType: 'incoming' | 'outgoing', value: Policy) 
                     ))}
                 </tbody>
             </table>
-             {rules.length === 0 && <p className="p-4 text-slate-500">No firewall rules configured.</p>}
+             {rules.length === 0 && <p className="p-4 text-slate-500">No firewall rules loaded. Waiting for connection...</p>}
         </div>
       </div>
     </>
