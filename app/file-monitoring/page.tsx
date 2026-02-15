@@ -242,7 +242,7 @@ export default function FileMonitoringPage() {
   const handleRemoveFile = async (id: string) => {
     // Get the file path before deleting
     const fileToRemove = monitoredFiles.find(f => f.id === id);
-    if (fileToRemove) {
+    if (fileToRemove && selectedAgent) {
       sendCommand(selectedAgent.id, 'unmonitor_file', {
         path: fileToRemove.file_path
       });
