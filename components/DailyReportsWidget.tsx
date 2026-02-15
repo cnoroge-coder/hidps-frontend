@@ -126,7 +126,7 @@ export default function DailyReportsWidget({ agentId }: DailyReportsWidgetProps)
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-white">Daily Reports</h3>
         <Link 
-          href="/dashboard/alerts"
+          href="/alerts"
           className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
         >
           View All
@@ -159,7 +159,7 @@ export default function DailyReportsWidget({ agentId }: DailyReportsWidgetProps)
                   <p className="text-xs text-slate-400">{report.summary}</p>
                 </div>
                 <Link 
-                  href="/dashboard/alerts"
+                  href="/alerts"
                   className="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap ml-2"
                 >
                   View
