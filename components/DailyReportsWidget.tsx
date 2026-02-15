@@ -86,18 +86,21 @@ export default function DailyReportsWidget({ agentId }: DailyReportsWidgetProps)
         // Count different alert types
         if (alert.alert_type === 'ssh_brute_force') {
           reportsByDay[dateKey].bruteForceCount++;
-          const ip = alert.data?.source_ip;
+          const ipMatch = alert.message.match(/from (\d+\.\d+\.\d+\.\d+)/);
+          const ip = ipMatch ? ipMatch[1] : null;
           if (ip && !reportsByDay[dateKey].bruteForceIPs.includes(ip)) {
             reportsByDay[dateKey].bruteForceIPs.push(ip);
           }
         } else if (alert.alert_type === 'auth_failure') {
-          const ip = alert.data?.source_ip;
+          const ipMatch = alert.message.match(/from (\d+\.\d+\.\d+\.\d+)/);
+          const ip = ipMatch ? ipMatch[1] : null;
           if (ip && !reportsByDay[dateKey].sshLoginIPs.includes(ip)) {
             reportsByDay[dateKey].sshLoginIPs.push(ip);
           }
         } else if (alert.alert_type === 'port_scan') {
           reportsByDay[dateKey].portScanCount++;
-          const ip = alert.data?.source_ip;
+          const ipMatch = alert.message.match(/from (\d+\.\d+\.\d+\.\d+):/);
+          const ip = ipMatch ? ipMatch[1] : null;
           if (ip && !reportsByDay[dateKey].portScanIPs.includes(ip)) {
             reportsByDay[dateKey].portScanIPs.push(ip);
           }
