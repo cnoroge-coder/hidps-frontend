@@ -121,7 +121,7 @@ export default function FileMonitoringPage() {
           filter: `agent_id=eq.${selectedAgent.id}`,
         },
         (payload: RealtimePostgresChangesPayload<Database['public']['Tables']['alerts']['Row']>) => {
-          if (payload.new.alert_type === 'file_monitoring') {
+          if (payload.new && 'alert_type' in payload.new && payload.new.alert_type === 'file_monitoring') {
             setDbAlerts((current : any) => [payload.new, ...current.slice(0, 19)]);
           }
         }
