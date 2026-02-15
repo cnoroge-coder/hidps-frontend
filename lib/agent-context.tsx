@@ -3,12 +3,10 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import { createClient } from './supabase/client';
 import { Database } from './supabase/database.types';
 
-type BaseAgent = Database['public']['Tables']['agents']['Row'];
-
-export type Agent = BaseAgent & {
-  firewall_enabled: boolean;
-  // Add more if needed later
-};
+// It appears the 'firewall_enabled' property is missing from your Supabase 'agents' table definition.
+// To fix this properly, you should add a 'firewall_enabled' column (e.g., of type BOOLEAN) to your 'agents' table in Supabase,
+// and then regenerate your 'supabase/database.types.ts' file.
+type Agent = Database['public']['Tables']['agents']['Row'] & { firewall_enabled?: boolean; };
 
 interface AgentContextType {
   selectedAgent: Agent | null;
@@ -38,15 +36,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching agents:', error);
       setAgents([]);
     } else if (data) {
-      // Map data to include firewall_enabled field
-      const mappedAgents: Agent[] = data.map(agent => ({
-        ...agent,
-        firewall_enabled: (agent as any).firewall_enabled ?? false
-      }));
-      setAgents(mappedAgents);
+      setAgents(data);
       // Only set selected agent if there isn't one already or if current one is no longer in the list
-      if (!selectedAgent && mappedAgents.length > 0) {
-        setSelectedAgent(mappedAgents.length > 0 ? mappedAgents[0] : null);
+      if (!selectedAgent && data.length > 0) {
+        setSelectedAgent(data.length > 0 ? data[0] : null);
       }
     }
   };

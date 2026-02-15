@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Bell, FileWarning, Shield, Users, Trash2, X, CheckCircle } from 'lucide-react';
+import { Bell, FileWarning, Shield, Users, Trash2, X, CheckCircle, AlertCircle } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
 import { createClient } from '@/lib/supabase/client';
@@ -10,12 +10,13 @@ import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 type Alert = Database['public']['Tables']['alerts']['Row'];
 type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
 
+// Map frontend display names to backend alert_type values
 const alertTypes = [
-    { name: 'All', icon: Bell },
-    { name: 'firewall', displayName: 'Firewall', icon: Shield },
-    { name: 'login', displayName: 'Login', icon: Users },
-    { name: 'file_monitoring', displayName: 'File Monitoring', icon: FileWarning },
-    { name: 'process', displayName: 'Process', icon: Bell },
+    { name: 'All', dbTypes: [], icon: Bell },
+    { name: 'Firewall', dbTypes: ['firewall', 'network'], icon: Shield },
+    { name: 'Login', dbTypes: ['login', 'security'], icon: Users },
+    { name: 'File Monitoring', dbTypes: ['file_monitoring', 'integrity'], icon: FileWarning },
+    { name: 'Process', dbTypes: ['process', 'privilege_escalation'], icon: Bell },
 ];
 
 const getSeverityStyling = (severity: number) => {
@@ -36,114 +37,37 @@ const getSeverityName = (severity: number): Severity => {
     }
 }
 
-
-// Static mock alerts as fallback
-const mockAlerts: Alert[] = [
-  {
-    id: 'mock-1',
-    agent_id: 'demo',
-    title: 'High CPU Usage Detected',
-    message: 'CPU usage exceeded 85% for more than 5 minutes',
-    alert_type: 'system',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-2',
-    agent_id: 'demo',
-    title: 'Unauthorized File Access Attempt',
-    message: 'File /etc/shadow was accessed by unauthorized process',
-    alert_type: 'file_monitoring',
-    severity: 4,
-    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-3',
-    agent_id: 'demo',
-    title: 'Failed SSH Login Attempts',
-    message: '5 failed SSH login attempts from IP 192.168.1.100',
-    alert_type: 'login',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-4',
-    agent_id: 'demo',
-    title: 'Firewall Rule Added',
-    message: 'New firewall rule added: Allow port 8080/tcp',
-    alert_type: 'firewall',
-    severity: 1,
-    created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    resolved: true,
-    resolved_by: 'admin',
-    resolved_at: new Date(Date.now() - 1000 * 60 * 85).toISOString(),
-  },
-  {
-    id: 'mock-5',
-    agent_id: 'demo',
-    title: 'Configuration File Modified',
-    message: 'File /etc/nginx/nginx.conf was modified',
-    alert_type: 'file_monitoring',
-    severity: 2,
-    created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-6',
-    agent_id: 'demo',
-    title: 'Suspicious Process Detected',
-    message: 'Unknown process with high network activity detected',
-    alert_type: 'process',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-];
-
 // --- MAIN ALERTS PAGE COMPONENT ---
 export default function AlertsPage() {
   const { selectedAgent } = useAgent();
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [debugMode, setDebugMode] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
-    if (!selectedAgent) {
-      // Use mock data when no agent selected
-      setAlerts(mockAlerts);
-      return;
-    }
+    if (!selectedAgent) return;
 
     const fetchAlerts = async () => {
       let query = supabase.from('alerts').select('*').eq('agent_id', selectedAgent.id);
       
+      // Filter by alert type if not "All"
       if (activeFilter !== 'All') {
-        query = query.eq('alert_type', activeFilter);
+        const filterConfig = alertTypes.find(t => t.name === activeFilter);
+        if (filterConfig && filterConfig.dbTypes.length > 0) {
+          // Use OR filter for multiple types
+          query = query.in('alert_type', filterConfig.dbTypes);
+        }
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching alerts:', error);
-        // Use mock data on error
-        setAlerts(mockAlerts);
       } else {
         console.log('Fetched alerts:', data);
-        setAlerts(data.length > 0 ? data : mockAlerts);
+        setAlerts(data);
       }
     };
 
@@ -162,8 +86,12 @@ export default function AlertsPage() {
         },
         (payload: RealtimePostgresChangesPayload<Alert> | any) => {
           console.log('New alert inserted:', payload.new);
-          // Only add if it matches the current filter or filter is 'All'
-          if (activeFilter === 'All' || payload.new.alert_type === activeFilter) {
+          
+          // Check if this alert matches the current filter
+          const shouldShow = activeFilter === 'All' || 
+            alertTypes.find(t => t.name === activeFilter)?.dbTypes.includes(payload.new.alert_type);
+          
+          if (shouldShow) {
             setAlerts((current) => [payload.new, ...current]);
           }
         }
@@ -240,83 +168,144 @@ export default function AlertsPage() {
     // No need to update state here - real-time subscription will handle it
   };
 
-  const filteredAlerts = alerts;
+  // Get unique alert types in database for debugging
+  const uniqueAlertTypes = [...new Set(alerts.map(a => a.alert_type))];
+  
+  // Count alerts per category
+  const getCategoryCount = (categoryName: string) => {
+    if (categoryName === 'All') return alerts.length;
+    const filterConfig = alertTypes.find(t => t.name === categoryName);
+    if (!filterConfig) return 0;
+    return alerts.filter(a => filterConfig.dbTypes.includes(a.alert_type || '')).length;
+  };
 
   return (
     <>
       {/* Main Content */}
-      
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
-            <h2 className="text-3xl font-bold text-white">Security Alerts</h2>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-white">Security Alerts</h2>
+          <div className="flex items-center gap-2">
             <p className="text-slate-400">Monitor, manage, and respond to threats in real-time.</p>
+            <button 
+              onClick={() => setDebugMode(!debugMode)}
+              className="flex items-center gap-1 text-xs text-blue-400 bg-blue-900/50 rounded-full px-2 py-0.5 hover:bg-blue-900 cursor-pointer"
+            >
+              <AlertCircle size={12} />
+              Debug
+            </button>
           </div>
-          <AgentSelector />
-        </header>
-
-        {/* Filter Tabs */}
-        <div className="flex items-center border-b border-slate-800 mb-6">
-            {alertTypes.map(type => (
-                <button 
-                    key={type.name}
-                    onClick={() => setActiveFilter(type.name)}
-                    className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors
-                        ${activeFilter === type.name 
-                            ? 'border-blue-500 text-blue-400' 
-                            : 'border-transparent text-slate-500 hover:text-slate-300'}`
-                    }
-                >
-                    <type.icon size={16} />
-                    {type.displayName || type.name}
-                </button>
-            ))}
         </div>
+        <AgentSelector />
+      </header>
 
-        {/* Alerts List */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredAlerts.map(alert => (
-                <div 
-                    key={alert.id}
-                    onClick={() => setSelectedAlert(alert)}
-                    className={`bg-slate-900 rounded-xl border-l-4 p-5 cursor-pointer transition-all hover:bg-slate-800/50 ${getSeverityStyling(alert.severity)} ${alert.resolved ? 'opacity-50' : ''}`}
-                >
-                    <div className="flex justify-between items-start">
-                        <h3 className="font-bold text-white pr-4">{alert.title}</h3>
-                        <span className="text-xs text-slate-500 whitespace-nowrap">{new Date(alert.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <p className="text-sm text-slate-400 mt-2 truncate">{alert.message}</p>
+      {/* Debug Info Panel */}
+      {debugMode && (
+        <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
+          <h3 className="text-sm font-bold text-white mb-2">Debug Information</h3>
+          <div className="text-xs text-slate-300 space-y-1 font-mono">
+            <p><strong>Total alerts:</strong> {alerts.length}</p>
+            <p><strong>Active filter:</strong> {activeFilter}</p>
+            <p><strong>Unique alert types in DB:</strong> {uniqueAlertTypes.join(', ') || 'None'}</p>
+            <div className="mt-2">
+              <strong>Type mappings:</strong>
+              {alertTypes.filter(t => t.name !== 'All').map(type => (
+                <div key={type.name} className="ml-2 text-cyan-400">
+                  • {type.name} → [{type.dbTypes.join(', ')}]
                 </div>
-            ))}
-            {filteredAlerts.length === 0 && <p className="text-slate-500">No alerts for this category.</p>}
-        </div>
-
-        {/* Alert Detail Modal */}
-        {selectedAlert && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl">
-                   <header className="flex justify-between items-center p-6 border-b border-slate-800">
-                        <div className="flex items-center gap-3">
-                            <span className={`p-2 h-fit rounded-full ${getSeverityStyling(selectedAlert.severity)}`}><Bell size={20}/></span>
-                            <div>
-                                <h2 className="text-xl font-bold text-white">{selectedAlert.title}</h2>
-                                <p className="text-sm text-slate-500">{new Date(selectedAlert.created_at).toUTCString()}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => setSelectedAlert(null)} className="p-2 rounded-full hover:bg-slate-800"><X size={20}/></button>
-                   </header>
-                   <div className="p-6">
-                        <p className="text-slate-300">{selectedAlert.message}</p>
-                   </div>
-                   <footer className="p-6 border-t border-slate-800 flex justify-end gap-4">
-                        <button onClick={() => handleDelete(selectedAlert.id)} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"><Trash2 size={16}/> Delete</button>
-                        {!selectedAlert.resolved && 
-                            <button onClick={() => handleResolve(selectedAlert.id)} className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20"><CheckCircle size={16}/> Resolve Alert</button>
-                        }
-                   </footer>
-                </div>
+              ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Tabs */}
+      <div className="flex items-center border-b border-slate-800 mb-6 overflow-x-auto">
+        {alertTypes.map(type => {
+          const count = getCategoryCount(type.name);
+          return (
+            <button 
+              key={type.name}
+              onClick={() => setActiveFilter(type.name)}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors whitespace-nowrap
+                ${activeFilter === type.name 
+                  ? 'border-blue-500 text-blue-400' 
+                  : 'border-transparent text-slate-500 hover:text-slate-300'}`
+              }
+            >
+              <type.icon size={16} />
+              <span>{type.name}</span>
+              <span className="text-xs opacity-60">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Alerts List */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+        {alerts.map(alert => (
+          <div 
+            key={alert.id}
+            onClick={() => setSelectedAlert(alert)}
+            className={`bg-slate-900 rounded-xl border-l-4 p-5 cursor-pointer transition-all hover:bg-slate-800/50 ${getSeverityStyling(alert.severity)} ${alert.resolved ? 'opacity-50' : ''}`}
+          >
+            <div className="flex justify-between items-start">
+              <h3 className="font-bold text-white pr-4">{alert.title}</h3>
+              <span className="text-xs text-slate-500 whitespace-nowrap">{new Date(alert.created_at).toLocaleTimeString()}</span>
+            </div>
+            <p className="text-sm text-slate-400 mt-2 line-clamp-2">{alert.message}</p>
+            {debugMode && (
+              <p className="text-xs text-cyan-400 mt-2 font-mono">Type: {alert.alert_type}</p>
+            )}
+          </div>
+        ))}
+        {alerts.length === 0 && (
+          <div className="col-span-full text-center py-8">
+            <p className="text-slate-500 mb-2">No alerts for this category.</p>
+            {activeFilter !== 'All' && uniqueAlertTypes.length > 0 && (
+              <div className="text-sm text-slate-600">
+                <p>Available types: {uniqueAlertTypes.join(', ')}</p>
+                <button 
+                  onClick={() => setActiveFilter('All')}
+                  className="mt-2 text-blue-400 hover:text-blue-300 underline"
+                >
+                  Show all alerts
+                </button>
+              </div>
+            )}
+          </div>
         )}
-      
+      </div>
+
+      {/* Alert Detail Modal */}
+      {selectedAlert && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl">
+            <header className="flex justify-between items-center p-6 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <span className={`p-2 h-fit rounded-full ${getSeverityStyling(selectedAlert.severity)}`}><Bell size={20}/></span>
+                <div>
+                  <h2 className="text-xl font-bold text-white">{selectedAlert.title}</h2>
+                  <p className="text-sm text-slate-500">{new Date(selectedAlert.created_at).toUTCString()}</p>
+                  {debugMode && (
+                    <p className="text-xs text-cyan-400 font-mono mt-1">Type: {selectedAlert.alert_type}</p>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setSelectedAlert(null)} className="p-2 rounded-full hover:bg-slate-800"><X size={20}/></button>
+            </header>
+            <div className="p-6">
+              <p className="text-slate-300 whitespace-pre-wrap">{selectedAlert.message}</p>
+            </div>
+            <footer className="p-6 border-t border-slate-800 flex justify-end gap-4">
+              <button onClick={() => handleDelete(selectedAlert.id)} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20"><Trash2 size={16}/> Delete</button>
+              {!selectedAlert.resolved && 
+                <button onClick={() => handleResolve(selectedAlert.id)} className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20"><CheckCircle size={16}/> Resolve Alert</button>
+              }
+            </footer>
+          </div>
+        </div>
+      )}
     </>
   );
 }

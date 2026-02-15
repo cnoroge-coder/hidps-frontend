@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { BookText, Shield, Users, FileWarning, Bell, Wifi, WifiOff } from 'lucide-react';
+import { BookText, Shield, Users, FileWarning, Bell, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
 import { useWebSocket } from '@/lib/websocket-context';
@@ -13,109 +13,35 @@ const logTypes = [
     { name: 'process', icon: Bell },
 ];
 
-// Static mock logs as fallback
-const mockLogs = [
-  {
-    id: 'log-1',
-    agent_id: 'demo',
-    type: 'firewall',
-    message: 'UFW firewall rule added: Allow 443/tcp from any',
-    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-2',
-    agent_id: 'demo',
-    type: 'file_monitoring',
-    message: 'File modified: /etc/nginx/nginx.conf',
-    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    severity: 'warning',
-  },
-  {
-    id: 'log-3',
-    agent_id: 'demo',
-    type: 'login',
-    message: 'SSH login successful: user admin from 192.168.1.50',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-4',
-    agent_id: 'demo',
-    type: 'login',
-    message: 'Failed SSH login attempt: user root from 203.0.113.45',
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    severity: 'warning',
-  },
-  {
-    id: 'log-5',
-    agent_id: 'demo',
-    type: 'process',
-    message: 'High CPU process detected: process_name (PID: 1234) using 87% CPU',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    severity: 'warning',
-  },
-  {
-    id: 'log-6',
-    agent_id: 'demo',
-    type: 'file_monitoring',
-    message: 'File created: /var/log/suspicious.log',
-    timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-7',
-    agent_id: 'demo',
-    type: 'firewall',
-    message: 'UFW firewall rule deleted: rule #3',
-    timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-8',
-    agent_id: 'demo',
-    type: 'file_monitoring',
-    message: 'File deleted: /tmp/temporary_file.txt',
-    timestamp: new Date(Date.now() - 1000 * 60 * 150).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-9',
-    agent_id: 'demo',
-    type: 'login',
-    message: 'User session started: admin logged in via console',
-    timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    severity: 'info',
-  },
-  {
-    id: 'log-10',
-    agent_id: 'demo',
-    type: 'process',
-    message: 'Service restarted: nginx.service',
-    timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-    severity: 'info',
-  },
-];
-
 // --- MAIN LOGS PAGE COMPONENT ---
 export default function LogsPage() {
   const { selectedAgent } = useAgent();
-  const { logs: wsLogs, isConnected } = useWebSocket();
+  const { logs, isConnected } = useWebSocket();
   const [activeFilter, setActiveFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
-  
-  // Use WebSocket logs if available and connected, otherwise use mock logs
-  const logs = (isConnected && wsLogs.length > 0) ? wsLogs : mockLogs;
+  const [debugInfo, setDebugInfo] = useState(false);
 
-  const logsPerPage = 5;
+  const logsPerPage = 50; // Increased from 5 to show more logs
 
+  // Filter logs by selected agent
   const agentLogs = selectedAgent 
     ? logs.filter(log => log.agent_id === selectedAgent.id)
     : logs;
 
+  // Filter logs by type - FIXED: Handle case sensitivity and trim whitespace
   const filteredLogs = activeFilter === 'All' 
     ? agentLogs 
-    : agentLogs.filter(l => l.type === activeFilter);
+    : agentLogs.filter(l => {
+        // Normalize both sides of comparison
+        const logType = (l.type || '').toString().toLowerCase().trim();
+        const filterType = activeFilter.toLowerCase().trim();
+        return logType === filterType;
+      });
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
 
   const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
 
@@ -123,6 +49,18 @@ export default function LogsPage() {
     (currentPage - 1) * logsPerPage,
     currentPage * logsPerPage
   );
+
+  // Debug: Get unique log types in current logs
+  const uniqueTypes = [...new Set(agentLogs.map(l => l.type))];
+  const typeCounts = logTypes.map(type => ({
+    name: type.name,
+    count: type.name === 'All' 
+      ? agentLogs.length 
+      : agentLogs.filter(l => {
+          const logType = (l.type || '').toString().toLowerCase().trim();
+          return logType === type.name.toLowerCase();
+        }).length
+  }));
 
   return (
     <>
@@ -143,27 +81,60 @@ export default function LogsPage() {
                 Disconnected
               </span>
             )}
+            <button 
+              onClick={() => setDebugInfo(!debugInfo)}
+              className="flex items-center gap-1 text-xs text-blue-400 bg-blue-900/50 rounded-full px-2 py-0.5 hover:bg-blue-900 cursor-pointer"
+            >
+              <AlertCircle size={12} />
+              Debug
+            </button>
           </div>
         </div>
         <AgentSelector />
       </header>
 
+      {/* Debug Info Panel */}
+      {debugInfo && (
+        <div className="mb-6 p-4 bg-slate-800 rounded-lg border border-slate-700">
+          <h3 className="text-sm font-bold text-white mb-2">Debug Information</h3>
+          <div className="text-xs text-slate-300 space-y-1 font-mono">
+            <p><strong>Total logs:</strong> {logs.length}</p>
+            <p><strong>Agent logs:</strong> {agentLogs.length}</p>
+            <p><strong>Filtered logs:</strong> {filteredLogs.length}</p>
+            <p><strong>Active filter:</strong> {activeFilter}</p>
+            <p><strong>Unique log types found:</strong> {uniqueTypes.join(', ') || 'None'}</p>
+            <div className="mt-2">
+              <strong>Sample log types (first 5):</strong>
+              {agentLogs.slice(0, 5).map((log, i) => (
+                <div key={i} className="ml-2 text-cyan-400">
+                  • type: "{log.type}" (length: {(log.type || '').length})
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter Tabs */}
-      <div className="flex items-center border-b border-slate-800 mb-6">
-        {logTypes.map(type => (
-          <button
-            key={type.name}
-            onClick={() => setActiveFilter(type.name)}
-            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors
-              ${activeFilter === type.name
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-300'}`
-            }
-          >
-            <type.icon size={16} />
-            {type.name}
-          </button>
-        ))}
+      <div className="flex items-center border-b border-slate-800 mb-6 overflow-x-auto">
+        {logTypes.map(type => {
+          const count = typeCounts.find(t => t.name === type.name)?.count || 0;
+          return (
+            <button
+              key={type.name}
+              onClick={() => setActiveFilter(type.name)}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors whitespace-nowrap
+                ${activeFilter === type.name
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'}`
+              }
+            >
+              <type.icon size={16} />
+              <span>{type.name}</span>
+              <span className="text-xs opacity-60">({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Logs Table */}
@@ -179,16 +150,46 @@ export default function LogsPage() {
               </tr>
             </thead>
             <tbody className="font-mono text-sm">
-              {paginatedLogs.map((logEntry, index) => (
-                <tr key={index} className="border-b border-slate-800 hover:bg-slate-800/50">
-                  <td className="p-4 text-slate-500 whitespace-nowrap">{new Date(logEntry.timestamp).toLocaleString()}</td>
-                  <td className="p-4 text-cyan-400">{logEntry.service}</td>
-                  <td className="p-4 text-slate-300">{logEntry.message}</td>
-                  <td className="p-4">
-                    <span className="px-2 py-1 rounded-full text-xs bg-slate-700 text-slate-300">{logEntry.type}</span>
+              {paginatedLogs.length > 0 ? (
+                paginatedLogs.map((logEntry, index) => (
+                  <tr key={index} className="border-b border-slate-800 hover:bg-slate-800/50">
+                    <td className="p-4 text-slate-500 whitespace-nowrap">
+                      {new Date(logEntry.timestamp).toLocaleString()}
+                    </td>
+                    <td className="p-4 text-cyan-400">{logEntry.service || 'unknown'}</td>
+                    <td className="p-4 text-slate-300 break-words max-w-xl">{logEntry.message}</td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 rounded-full text-xs bg-slate-700 text-slate-300">
+                        {logEntry.type || 'unknown'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center">
+                    <div className="text-slate-500">
+                      {activeFilter === 'All' ? (
+                        <>
+                          <p className="mb-2">No logs to display.</p>
+                          <p className="text-sm">Listening for new events from the agent...</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mb-2">No logs found for type: <strong className="text-blue-400">{activeFilter}</strong></p>
+                          <p className="text-sm">Available types: {uniqueTypes.join(', ') || 'None yet'}</p>
+                          <button 
+                            onClick={() => setActiveFilter('All')}
+                            className="mt-3 text-blue-400 hover:text-blue-300 underline text-sm"
+                          >
+                            Show all logs
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
           {totalPages > 1 && (
@@ -196,25 +197,24 @@ export default function LogsPage() {
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(p => p - 1)}
-                className="px-3 py-1 bg-slate-800 rounded disabled:opacity-50"
+                className="px-3 py-1 bg-slate-800 rounded disabled:opacity-50 hover:bg-slate-700 transition"
               >
                 Previous
               </button>
 
               <span className="text-slate-400">
-                Page {currentPage} of {totalPages}
+                Page {currentPage} of {totalPages} ({filteredLogs.length} logs)
               </span>
 
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(p => p + 1)}
-                className="px-3 py-1 bg-slate-800 rounded disabled:opacity-50"
+                className="px-3 py-1 bg-slate-800 rounded disabled:opacity-50 hover:bg-slate-700 transition"
               >
                 Next
               </button>
             </div>
           )}
-          {filteredLogs.length === 0 && <p className="p-4 text-slate-500">No logs to display. Listening for new events...</p>}
         </div>
       </div>
     </>

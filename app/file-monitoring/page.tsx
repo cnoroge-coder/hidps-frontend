@@ -1,103 +1,71 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, FileWarning, AlertCircle } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
-import { useWebSocket } from '@/lib/websocket-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { useWebSocket } from '@/lib/websocket-context';
 
 type MonitoredFile = Database['public']['Tables']['monitored_files']['Row'];
-type Alert = Database['public']['Tables']['alerts']['Row'];
 
-// Static mock data as fallback
-const mockMonitoredFiles: MonitoredFile[] = [
-  {
-    id: 'mock-file-1',
-    agent_id: 'demo',
-    file_path: '/etc/passwd',
-    added_by: 'admin',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-  {
-    id: 'mock-file-2',
-    agent_id: 'demo',
-    file_path: '/etc/shadow',
-    added_by: 'admin',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-  },
-  {
-    id: 'mock-file-3',
-    agent_id: 'demo',
-    file_path: '/var/log/auth.log',
-    added_by: 'admin',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-  },
-  {
-    id: 'mock-file-4',
-    agent_id: 'demo',
-    file_path: '/etc/nginx/nginx.conf',
-    added_by: 'admin',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(),
-  },
-];
-
-const mockAlerts: Alert[] = [
-  {
-    id: 'mock-alert-1',
-    agent_id: 'demo',
-    title: 'File Modified',
-    message: 'File modified: /etc/passwd',
-    alert_type: 'file_monitoring',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-alert-2',
-    agent_id: 'demo',
-    title: 'File Created',
-    message: 'New file created: /tmp/suspicious.sh',
-    alert_type: 'file_monitoring',
-    severity: 2,
-    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'mock-alert-3',
-    agent_id: 'demo',
-    title: 'File Deleted',
-    message: 'File deleted: /var/log/important.log',
-    alert_type: 'file_monitoring',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-];
+// Helper function to extract clean file information from log messages
+function parseFileLogMessage(message: string) {
+  // Pattern 1: "Monitored file MODIFIED: /path/to/file"
+  const modifiedMatch = message.match(/Monitored file (?:MODIFIED|UPDATED|DELETED|MOVED|being edited): (.+?)(?:\s|$)/);
+  if (modifiedMatch) {
+    const filepath = modifiedMatch[1].trim();
+    const filename = filepath.split('/').pop() || filepath;
+    
+    if (message.includes('MODIFIED')) {
+      return { action: 'Modified', filepath, filename, icon: '📝' };
+    } else if (message.includes('UPDATED') || message.includes('saved by editor')) {
+      return { action: 'Saved', filepath, filename, icon: '💾' };
+    } else if (message.includes('DELETED')) {
+      return { action: 'Deleted', filepath, filename, icon: '🗑️' };
+    } else if (message.includes('being edited')) {
+      return { action: 'Editing', filepath, filename, icon: '✏️' };
+    }
+  }
+  
+  // Pattern 2: "New file created in monitored location: /path/to/file"
+  const createdMatch = message.match(/New file created in monitored location: (.+?)(?:\s|$)/);
+  if (createdMatch) {
+    const filepath = createdMatch[1].trim();
+    const filename = filepath.split('/').pop() || filepath;
+    return { action: 'Created', filepath, filename, icon: '➕' };
+  }
+  
+  // Pattern 3: Check for temp files - skip them
+  if (message.includes('.goutputstream') || 
+      message.includes('.swp') || 
+      message.includes('~') ||
+      message.includes('.tmp')) {
+    return null; // Skip temp file events
+  }
+  
+  // Fallback: try to extract any file path
+  const pathMatch = message.match(/\/[\w\/.-]+/);
+  if (pathMatch) {
+    const filepath = pathMatch[0];
+    const filename = filepath.split('/').pop() || filepath;
+    return { action: 'Changed', filepath, filename, icon: '📄' };
+  }
+  
+  return null; // Skip unparseable logs
+}
 
 // --- MAIN FILE MONITORING PAGE COMPONENT ---
 export default function FileMonitoringPage() {
   const { selectedAgent } = useAgent();
-  const { sendCommand, logs } = useWebSocket();
-  const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>(mockMonitoredFiles);
-  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+  const { logs, sendCommand } = useWebSocket(); // ADD sendCommand here
+  const [monitoredFiles, setMonitoredFiles] = useState<MonitoredFile[]>([]);
   const [newFilePath, setNewFilePath] = useState('');
   const supabase = createClient();
 
   useEffect(() => {
-    if (!selectedAgent) {
-      // Use mock data when no agent selected
-      setMonitoredFiles(mockMonitoredFiles);
-      setAlerts(mockAlerts);
-      return;
-    }
+    if (!selectedAgent) return;
 
     const fetchMonitoredFiles = async () => {
       const { data, error } = await supabase
@@ -108,31 +76,20 @@ export default function FileMonitoringPage() {
 
       if (error) {
         console.error('Error fetching monitored files:', error);
-        setMonitoredFiles(mockMonitoredFiles);
       } else {
-        setMonitoredFiles(data.length > 0 ? data : mockMonitoredFiles);
-      }
-    };
-
-    const fetchAlerts = async () => {
-      const { data, error } = await supabase
-        .from('alerts')
-        .select('*')
-        .eq('agent_id', selectedAgent.id)
-        .eq('alert_type', 'file_monitoring')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.error('Error fetching file monitoring alerts:', error);
-        setAlerts(mockAlerts);
-      } else {
-        setAlerts(data.length > 0 ? data : mockAlerts);
+        setMonitoredFiles(data);
+        
+        // IMPORTANT: Send monitor_file command for all existing files on page load
+        // This ensures the agent starts watching them
+        if (sendCommand && data) {
+          data.forEach(file => {
+            sendCommand(selectedAgent.id, 'monitor_file', { path: file.file_path });
+          });
+        }
       }
     };
 
     fetchMonitoredFiles();
-    fetchAlerts();
 
     // Set up real-time subscription
     const channel = supabase
@@ -182,32 +139,11 @@ export default function FileMonitoringPage() {
       )
       .subscribe();
 
-    // Set up real-time subscription for alerts
-    const alertsChannel = supabase
-      .channel(`alerts:agent_id=eq.${selectedAgent.id}`)
-      .on<Alert>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'alerts',
-          filter: `agent_id=eq.${selectedAgent.id}`,
-        },
-        (payload: RealtimePostgresChangesPayload<Alert>) => {
-          if ((payload.new as Alert).alert_type === 'file_monitoring') {
-            console.log('New file monitoring alert:', payload.new);
-            setAlerts((current) => [payload.new as Alert, ...current.slice(0, 9)]); // Keep only 10
-          }
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscriptions on unmount or when selectedAgent changes
+    // Cleanup subscription on unmount or when selectedAgent changes
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(alertsChannel);
     };
-  }, [selectedAgent, supabase]);
+  }, [selectedAgent, supabase, sendCommand]); // Add sendCommand to dependencies
 
   const handleAddFile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,37 +160,46 @@ export default function FileMonitoringPage() {
 
     const { error } = await supabase.from('monitored_files').insert(newFile);
 
-    // Send command to agent to start monitoring
-    if (!error) {
-      sendCommand(selectedAgent.id, 'monitor_file', {
-        path: newFilePath.trim()
-      });
-    }
-
     if (error) {
       console.error('Error adding file:', error);
     } else {
-      // No need to update state here - real-time subscription will handle it
+      // FIXED: Send command to agent via WebSocket to start monitoring
+      if (sendCommand) {
+        sendCommand(selectedAgent.id, 'monitor_file', { path: newFilePath.trim() });
+        console.log('Sent monitor_file command for:', newFilePath.trim());
+      }
       setNewFilePath('');
     }
   };
 
   const handleRemoveFile = async (id: string) => {
-    // Get the file path before deleting
+    // Find the file to get its path before deleting
     const fileToRemove = monitoredFiles.find(f => f.id === id);
-    if (fileToRemove && selectedAgent) {
-      sendCommand(selectedAgent.id, 'unmonitor_file', {
-        path: fileToRemove.file_path
-      });
-    }
-
+    
     const { error } = await supabase.from('monitored_files').delete().eq('id', id);
     
     if (error) {
       console.error('Error deleting file:', error);
+    } else {
+      // FIXED: Send command to agent to stop monitoring
+      if (sendCommand && fileToRemove && selectedAgent) {
+        sendCommand(selectedAgent.id, 'unmonitor_file', { path: fileToRemove.file_path });
+        console.log('Sent unmonitor_file command for:', fileToRemove.file_path);
+      }
     }
-    // No need to update state here - real-time subscription will handle it
   };
+
+  // Filter logs for file monitoring events for this agent
+  const fileLogs = selectedAgent 
+    ? logs
+        .filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring')
+        .map(log => ({
+          ...log,
+          parsed: parseFileLogMessage(log.message)
+        }))
+        .filter(log => log.parsed !== null) // Remove unparseable or temp file logs
+        .slice(0, 10) // Show last 10 file events
+    : [];
 
   return (
     <>
@@ -319,44 +264,45 @@ export default function FileMonitoringPage() {
           </div>
         </div>
 
-        {/* Recent File Activity */}
+        {/* Recent File Logs */}
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-          <h3 className="text-xl font-bold text-white mb-4">Recent File Activity</h3>
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <FileWarning className="text-yellow-400" size={20} />
+            Recent File Events
+          </h3>
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {selectedAgent ? (
-              <>
-                {/* Show alerts */}
-                {alerts.map((alert) => (
-                  <div key={`alert-${alert.id}`} className="bg-red-900/20 border border-red-500/30 p-3 rounded-lg">
-                    <div className="flex justify-between items-start">
-                      <p className="text-red-400 font-mono text-sm">{alert.title}: {alert.message}</p>
-                      <span className="text-xs text-slate-500 whitespace-nowrap">
-                        {new Date(alert.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-                {/* Show logs */}
-                {logs
-                  .filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring')
-                  .slice(0, 10)
-                  .map((logEntry, index) => (
-                    <div key={`log-${index}`} className="bg-slate-800 p-3 rounded-lg">
-                      <div className="flex justify-between items-start">
-                        <p className="text-cyan-400 font-mono text-sm">{logEntry.message}</p>
-                        <span className="text-xs text-slate-500 whitespace-nowrap">
-                          {new Date(logEntry.timestamp).toLocaleTimeString()}
-                        </span>
+            {fileLogs.length === 0 ? (
+              <p className="text-sm text-slate-500">No file events detected yet.</p>
+            ) : (
+              fileLogs.map((log, index) => {
+                const parsed = log.parsed!;
+                return (
+                  <div 
+                    key={index} 
+                    className="p-3 bg-slate-800/50 rounded-lg border-l-2 border-yellow-500"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 flex-shrink-0">{parsed.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-yellow-400">
+                            {parsed.action}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-200 font-semibold mb-1">
+                          {parsed.filename}
+                        </p>
+                        <p className="text-xs text-slate-400 font-mono break-all">
+                          {parsed.filepath}
+                        </p>
                       </div>
                     </div>
-                  ))
-                }
-              </>
-            ) : (
-              <p className="text-slate-400">Select an agent to view file activity</p>
-            )}
-            {selectedAgent && alerts.length === 0 && logs.filter(log => log.agent_id === selectedAgent.id && log.type === 'file_monitoring').length === 0 && (
-              <p className="text-slate-400">No recent file activity</p>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

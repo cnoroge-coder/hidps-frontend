@@ -1,91 +1,15 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Bell, Shield, Cpu, MemoryStick, HardDrive } from 'lucide-react';
 import AgentSelector from '@/components/AgentSelector';
 import { useAgent } from '@/lib/agent-context';
+import { useWebSocket } from '@/lib/websocket-context';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
+import DailyReportsWidget from '@/components/DailyReportsWidget';
 
 type Alert = Database['public']['Tables']['alerts']['Row'];
 type AgentStats = Database['public']['Tables']['agent_stats']['Row'];
-
-// Static mock data as fallback
-const mockAlerts: Alert[] = [
-  {
-    id: 'dash-alert-1',
-    agent_id: 'demo',
-    title: 'High CPU Usage',
-    message: 'CPU usage exceeded 85%',
-    alert_type: 'system',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'dash-alert-2',
-    agent_id: 'demo',
-    title: 'Unauthorized File Access',
-    message: 'Attempt to access /etc/shadow',
-    alert_type: 'file_monitoring',
-    severity: 4,
-    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-  {
-    id: 'dash-alert-3',
-    agent_id: 'demo',
-    title: 'Failed Login Attempt',
-    message: 'Multiple failed SSH attempts from 192.168.1.100',
-    alert_type: 'login',
-    severity: 3,
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    resolved: false,
-    resolved_by: null,
-    resolved_at: null,
-  },
-];
-
-const mockLogs = [
-  {
-    id: 'dash-log-1',
-    agent_id: 'demo',
-    type: 'firewall',
-    message: 'Firewall rule added: Allow 443/tcp',
-    timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-  },
-  {
-    id: 'dash-log-2',
-    agent_id: 'demo',
-    type: 'file_monitoring',
-    message: 'File modified: /etc/hosts',
-    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    id: 'dash-log-3',
-    agent_id: 'demo',
-    type: 'login',
-    message: 'SSH login successful: admin from 192.168.1.50',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  },
-  {
-    id: 'dash-log-4',
-    agent_id: 'demo',
-    type: 'process',
-    message: 'Service started: nginx.service',
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-  {
-    id: 'dash-log-5',
-    agent_id: 'demo',
-    type: 'system',
-    message: 'System resource check completed',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-  },
-];
 
 const ResourceUsage = ({ icon: Icon, title, value, color }: { icon: React.ElementType, title: string, value: number, color: string }) => (
   <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
@@ -117,15 +41,13 @@ const StatusIndicator = ({ label, isOnline }: { label: string, isOnline: boolean
 
 export default function DashboardPage() {
   const { selectedAgent } = useAgent();
-  const [recentAlerts, setRecentAlerts] = useState<Alert[]>(mockAlerts);
+  const { logs } = useWebSocket();
+  const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
   const [agentStats, setAgentStats] = useState<AgentStats | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
-    if (!selectedAgent) {
-      setRecentAlerts(mockAlerts);
-      return;
-    }
+    if (!selectedAgent) return;
 
     const fetchAgentStats = async () => {
       const { data } = await supabase
@@ -159,34 +81,34 @@ export default function DashboardPage() {
   }, [selectedAgent, supabase]);
 
   useEffect(() => {
-    if (!selectedAgent) {
-      setRecentAlerts(mockAlerts);
-      return;
-    }
+    if (!selectedAgent) return;
 
     const fetchAlerts = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('alerts')
         .select('*')
         .eq('agent_id', selectedAgent.id)
         .order('created_at', { ascending: false })
-        .limit(3); // ✅ changed to 3
+        .limit(3);
 
-      if (error) {
-        console.error('Error fetching alerts:', error);
-        setRecentAlerts(mockAlerts);
-      } else if (data) {
-        setRecentAlerts(data.length > 0 ? data : mockAlerts);
-      }
+      if (data) setRecentAlerts(data);
     };
 
     fetchAlerts();
   }, [selectedAgent, supabase]);
 
+  const recentLogs = useMemo(() => {
+    if (!selectedAgent) return [];
+    return logs
+      .filter(log => log.agent_id === selectedAgent.id)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 3);
+  }, [logs, selectedAgent]);
+
   const cpu = Number(agentStats?.cpu_usage ?? 0);
   const ram = Number(agentStats?.ram_usage ?? 0);
   const storage = Number(agentStats?.storage_usage ?? 0);
-  const firewallEnabled = agentStats?.firewall_enabled || false;
+  const firewallEnabled = selectedAgent?.firewall_enabled ?? false;
 
   return (
     <>
@@ -210,14 +132,14 @@ export default function DashboardPage() {
           <span className={`font-bold px-3 py-1 rounded-full ${
             firewallEnabled
               ? 'text-green-400 bg-green-500/10'
-              : 'text-red-400 bg-red-500/10' // ✅ fixed typo
+              : 'text-red-400 bg-red-500/10'
           }`}>
             {firewallEnabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Alerts */}
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
           <h3 className="text-xl font-bold text-white mb-4">Recent Alerts</h3>
@@ -239,21 +161,29 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Static Logs */}
+        {/* Recent Logs */}
         <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
           <h3 className="text-xl font-bold text-white mb-4">Recent Logs</h3>
           <div className="font-mono text-xs text-slate-400 space-y-2">
-            {mockLogs.slice(0, 3).map((log) => (
-              <div key={log.id} className="p-2 rounded hover:bg-slate-800/50">
+            {recentLogs.map((log, index) => (
+              <div key={index} className="p-2 rounded hover:bg-slate-800/50">
                 <p className="text-slate-500">
                   {new Date(log.timestamp).toLocaleString()}
                 </p>
-                <p className="text-cyan-400">{log.type}</p>
+                <p className="text-cyan-400">{log.service}</p>
                 <p className="text-slate-300">{log.message}</p>
               </div>
             ))}
+            {recentLogs.length === 0 && (
+              <p className="text-slate-500">No recent logs.</p>
+            )}
           </div>
         </div>
+
+        {/* Daily Reports - REPLACED WITH WIDGET */}
+        {selectedAgent && (
+          <DailyReportsWidget agentId={selectedAgent.id} />
+        )}
       </div>
     </>
   );
