@@ -130,7 +130,6 @@ export default function FileMonitoringPage() {
 
     // Cleanup subscription on unmount or when selectedAgent changes
     return () => {
-      supabase.removeChannel(channel);
       supabase.removeChannel(alertsChannel);
     };
   }, [selectedAgent, supabase, sendCommand]); // Add sendCommand to dependencies
