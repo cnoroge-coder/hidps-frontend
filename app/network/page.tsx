@@ -100,11 +100,30 @@ export default function NetworkPage() {
     };
   }, [selectedAgent, supabase]);
 
+  const clearAllEvents = async () => {
+    if (!selectedAgent) return;
+    if (!confirm('Are you sure you want to delete all network events? This action cannot be undone.')) return;
+
+    const { error } = await supabase
+      .from('alerts')
+      .delete()
+      .eq('agent_id', selectedAgent.id)
+      .in('alert_type', ['ssh_brute_force', 'port_scan', 'auth_success', 'auth_failure', 'auth_info']);
+
+    if (error) {
+      console.error('Error deleting events:', error);
+      alert('Failed to delete events. Please try again.');
+    } else {
+      setEvents([]);
+      setLiveEvents([]);
+    }
+  };
+
   // Filter events based on active filter
   const filteredEvents = events.filter(event => {
     if (activeFilter === 'All') return true;
-    const filterConfig = networkEventTypes.find(type => type.name === activeFilter);
-    return filterConfig?.dbTypes.includes(event.alert_type || '') || false;
+    const typeConfig = networkEventTypes.find(t => t.name === activeFilter);
+    return typeConfig && typeConfig.dbTypes.includes(event.alert_type || '');
   });
 
   const formatEventTime = (timestamp: string) => {
@@ -200,9 +219,19 @@ export default function NetworkPage() {
       {/* Events List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Network Events ({filteredEvents.length})
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Network Events ({filteredEvents.length})
+            </h2>
+            {filteredEvents.length > 0 && (
+              <button
+                onClick={clearAllEvents}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
 
           {filteredEvents.length === 0 ? (
             <div className="text-center py-12">
