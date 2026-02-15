@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Shield, Lock, Activity, Bell, Terminal, Zap } from 'lucide-react';
 import Link from 'next/link';
 
+// Test comment to verify push access
 export default function LandingPage() {
   useEffect(() => {
     const elements = document.querySelectorAll('.animate-on-scroll');
