@@ -65,8 +65,6 @@ export default function FileMonitoringPage() {
   const [dbAlerts, setDbAlerts] = useState<any[]>([]);
   const supabase = createClient();
 
-  const supabase = createClient();
-
   useEffect(() => {
     if (!selectedAgent) return;
 
