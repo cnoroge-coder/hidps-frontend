@@ -44,13 +44,16 @@ export default function AlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const [debugMode, setDebugMode] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalAlerts, setTotalAlerts] = useState(0);
+  const itemsPerPage = 12;
   const supabase = createClient();
 
   useEffect(() => {
     if (!selectedAgent) return;
 
     const fetchAlerts = async () => {
-      let query = supabase.from('alerts').select('*').eq('agent_id', selectedAgent.id);
+      let query = supabase.from('alerts').select('*', { count: 'exact' }).eq('agent_id', selectedAgent.id);
       
       // Filter by alert type if not "All"
       if (activeFilter !== 'All') {
@@ -61,13 +64,22 @@ export default function AlertsPage() {
         }
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // Only show unresolved alerts
+      query = query.eq('resolved', false);
+
+      // Add pagination
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+      query = query.range(from, to).order('created_at', { ascending: false });
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('Error fetching alerts:', error);
       } else {
         console.log('Fetched alerts:', data);
-        setAlerts(data);
+        setAlerts(data || []);
+        setTotalAlerts(count || 0);
       }
     };
 
@@ -276,6 +288,29 @@ export default function AlertsPage() {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalAlerts > itemsPerPage && (
+        <div className="flex justify-center items-center gap-4 mt-8">
+          <button
+            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-slate-400">
+            Page {currentPage} of {Math.ceil(totalAlerts / itemsPerPage)}
+          </span>
+          <button
+            onClick={() => setCurrentPage(Math.min(Math.ceil(totalAlerts / itemsPerPage), currentPage + 1))}
+            disabled={currentPage === Math.ceil(totalAlerts / itemsPerPage)}
+            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {/* Alert Detail Modal */}
       {selectedAlert && (

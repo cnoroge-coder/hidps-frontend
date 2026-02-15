@@ -13,6 +13,11 @@ interface DailyReport {
   totalHigh: number;
   summary: string;
   topThreats: Alert[];
+  bruteForceCount: number;
+  bruteForceIPs: string[];
+  sshLoginIPs: string[];
+  portScanCount: number;
+  portScanIPs: string[];
 }
 
 interface DailyReportsWidgetProps {
@@ -66,12 +71,37 @@ export default function DailyReportsWidget({ agentId }: DailyReportsWidgetProps)
             totalCritical: 0,
             totalHigh: 0,
             summary: '',
-            topThreats: []
+            topThreats: [],
+            bruteForceCount: 0,
+            bruteForceIPs: [],
+            sshLoginIPs: [],
+            portScanCount: 0,
+            portScanIPs: []
           };
         }
 
         if (alert.severity === 4) reportsByDay[dateKey].totalCritical++;
         if (alert.severity === 3) reportsByDay[dateKey].totalHigh++;
+        
+        // Count different alert types
+        if (alert.alert_type === 'ssh_brute_force') {
+          reportsByDay[dateKey].bruteForceCount++;
+          const ip = alert.data?.source_ip;
+          if (ip && !reportsByDay[dateKey].bruteForceIPs.includes(ip)) {
+            reportsByDay[dateKey].bruteForceIPs.push(ip);
+          }
+        } else if (alert.alert_type === 'auth_failure') {
+          const ip = alert.data?.source_ip;
+          if (ip && !reportsByDay[dateKey].sshLoginIPs.includes(ip)) {
+            reportsByDay[dateKey].sshLoginIPs.push(ip);
+          }
+        } else if (alert.alert_type === 'port_scan') {
+          reportsByDay[dateKey].portScanCount++;
+          const ip = alert.data?.source_ip;
+          if (ip && !reportsByDay[dateKey].portScanIPs.includes(ip)) {
+            reportsByDay[dateKey].portScanIPs.push(ip);
+          }
+        }
         
         // Keep top 3 threats for each day
         if (reportsByDay[dateKey].topThreats.length < 3) {
@@ -81,12 +111,28 @@ export default function DailyReportsWidget({ agentId }: DailyReportsWidgetProps)
 
       // Generate summaries
       Object.values(reportsByDay).forEach(report => {
-        if (report.totalCritical > 0) {
+        const summaryParts = [];
+        
+        if (report.bruteForceCount > 0) {
+          summaryParts.push(`${report.bruteForceCount} brute force attack${report.bruteForceCount > 1 ? 's' : ''} from ${report.bruteForceIPs.length} IP${report.bruteForceIPs.length > 1 ? 's' : ''} (${report.bruteForceIPs.join(', ')})`);
+        }
+        
+        if (report.sshLoginIPs.length > 0) {
+          summaryParts.push(`${report.sshLoginIPs.length} SSH login attempt${report.sshLoginIPs.length > 1 ? 's' : ''} from IP${report.sshLoginIPs.length > 1 ? 's' : ''} (${report.sshLoginIPs.join(', ')})`);
+        }
+        
+        if (report.portScanCount > 0) {
+          summaryParts.push(`${report.portScanCount} port scan${report.portScanCount > 1 ? 's' : ''} from ${report.portScanIPs.length} IP${report.portScanIPs.length > 1 ? 's' : ''} (${report.portScanIPs.join(', ')})`);
+        }
+        
+        if (summaryParts.length > 0) {
+          report.summary = summaryParts.join('; ');
+        } else if (report.totalCritical > 0) {
           report.summary = `${report.totalCritical} critical threat${report.totalCritical > 1 ? 's' : ''} detected.`;
         } else if (report.totalHigh > 0) {
           report.summary = `${report.totalHigh} high-priority alert${report.totalHigh > 1 ? 's' : ''}.`;
         } else {
-          report.summary = 'No critical issues.';
+          report.summary = 'No significant security events.';
         }
       });
 
