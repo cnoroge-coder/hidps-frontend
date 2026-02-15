@@ -11,7 +11,7 @@ type Alert = Database['public']['Tables']['alerts']['Row'];
 
 const networkEventTypes = [
     { name: 'All', dbTypes: [], icon: Network },
-    { name: 'SSH Logins', dbTypes: ['auth_success', 'auth_failure'], icon: Shield },
+    { name: 'SSH Logins', dbTypes: ['auth_success', 'auth_failure', 'auth_logout'], icon: Shield },
     { name: 'Brute Force', dbTypes: ['ssh_brute_force'], icon: AlertTriangle },
     { name: 'Port Scans', dbTypes: ['port_scan'], icon: Zap },
     { name: 'Shell Access', dbTypes: ['auth_info'], icon: Users },
@@ -23,6 +23,7 @@ const getEventIcon = (alertType: string) => {
         case 'port_scan': return Zap;
         case 'auth_success': return CheckCircle;
         case 'auth_failure': return XCircle;
+        case 'auth_logout': return CheckCircle; // Same as success for logout
         default: return Clock;
     }
 };
@@ -33,6 +34,7 @@ const getEventColor = (alertType: string) => {
         case 'port_scan': return 'text-orange-400 bg-orange-500/20 border-orange-500/30';
         case 'auth_success': return 'text-green-400 bg-green-500/20 border-green-500/30';
         case 'auth_failure': return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
+        case 'auth_logout': return 'text-blue-400 bg-blue-500/20 border-blue-500/30'; // Blue for logout
         default: return 'text-blue-400 bg-blue-500/20 border-blue-500/30';
     }
 };
