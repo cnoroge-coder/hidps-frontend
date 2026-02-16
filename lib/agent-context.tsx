@@ -18,9 +18,22 @@ interface AgentContextType {
 const AgentContext = createContext<AgentContextType | undefined>(undefined);
 
 export function AgentProvider({ children }: { children: ReactNode }) {
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [selectedAgent, setSelectedAgentState] = useState<Agent | null>(() => {
+    if (typeof window !== 'undefined') {
+      const storedId = localStorage.getItem('selectedAgentId');
+      return storedId ? { id: storedId } as Agent : null; // Temporary object, will be replaced
+    }
+    return null;
+  });
   const [agents, setAgents] = useState<Agent[]>([]);
   const supabase = createClient();
+
+  const setSelectedAgent = (agent: Agent | null) => {
+    setSelectedAgentState(agent);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedAgentId', agent?.id || '');
+    }
+  };
 
   const fetchAgents = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -37,9 +50,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       setAgents([]);
     } else if (data) {
       setAgents(data);
-      // Only set selected agent if there isn't one already or if current one is no longer in the list
-      if (!selectedAgent && data.length > 0) {
-        setSelectedAgent(data.length > 0 ? data[0] : null);
+      // Set selected agent: prefer stored one, otherwise first in list
+      const storedId = typeof window !== 'undefined' ? localStorage.getItem('selectedAgentId') : null;
+      const storedAgent = storedId ? data.find(a => a.id === storedId) : null;
+      if (storedAgent) {
+        setSelectedAgentState(storedAgent);
+      } else if (!selectedAgent && data.length > 0) {
+        setSelectedAgent(data[0]);
       }
     }
   };
