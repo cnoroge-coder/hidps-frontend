@@ -35,6 +35,8 @@ interface DailyReport {
   alertsByType: Record<string, number>;
   topIPs: Array<{ ip: string; count: number }>;
   alerts: Alert[];
+  uniqueIPs: number;
+  timeRange: { start: string; end: string };
 }
 
 export default function DailyReportsPage() {
@@ -91,12 +93,21 @@ export default function DailyReportsPage() {
               .slice(0, 5)
               .map(([ip, count]) => ({ ip, count }));
 
+            const uniqueIPs = Object.keys(ipCounts).length;
+            const sortedAlerts = dayAlerts.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            const timeRange = {
+              start: sortedAlerts[0]?.created_at || '',
+              end: sortedAlerts[sortedAlerts.length - 1]?.created_at || ''
+            };
+
             return {
               date,
               totalAlerts: dayAlerts.length,
               alertsByType,
               topIPs,
-              alerts: dayAlerts
+              alerts: dayAlerts,
+              uniqueIPs,
+              timeRange
             };
           })
           .sort((a, b) => b.date.localeCompare(a.date));
@@ -242,6 +253,25 @@ export default function DailyReportsPage() {
                         <div className="text-right">
                           <div className="text-3xl font-bold text-cyan-400">{selectedReport.totalAlerts}</div>
                           <div className="text-sm text-slate-400">Total Alerts</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <div className="text-cyan-400 font-semibold">Unique IPs</div>
+                          <div className="text-white">{selectedReport.uniqueIPs}</div>
+                        </div>
+                        <div>
+                          <div className="text-cyan-400 font-semibold">Time Range</div>
+                          <div className="text-white">
+                            {selectedReport.timeRange.start ? new Date(selectedReport.timeRange.start).toLocaleTimeString() : 'N/A'} - 
+                            {selectedReport.timeRange.end ? new Date(selectedReport.timeRange.end).toLocaleTimeString() : 'N/A'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-cyan-400 font-semibold">Most Active Type</div>
+                          <div className="text-white">
+                            {Object.entries(selectedReport.alertsByType).sort(([,a], [,b]) => b - a)[0]?.[0] || 'None'}
+                          </div>
                         </div>
                       </div>
                     </div>
