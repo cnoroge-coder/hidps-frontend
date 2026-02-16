@@ -225,9 +225,9 @@ export default function FileMonitoringPage() {
         <AgentSelector />
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Monitored Files List */}
-        <div className="lg:col-span-2">
+        <div>
           <form onSubmit={handleAddFile} className="flex gap-2 mb-6">
             <input
               type="text"
@@ -275,49 +275,6 @@ export default function FileMonitoringPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Recent File Logs */}
-        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <FileWarning className="text-yellow-400" size={20} />
-            Recent File Events
-          </h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {fileLogs.length === 0 ? (
-              <p className="text-sm text-slate-500">No file events detected yet.</p>
-            ) : (
-              fileLogs.map((log, index) => {
-                const parsed = log.parsed!;
-                return (
-                  <div 
-                    key={index} 
-                    className="p-3 bg-slate-800/50 rounded-lg border-l-2 border-yellow-500"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="mt-0.5 flex-shrink-0">{parsed.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-semibold text-yellow-400">
-                            {parsed.action}
-                          </span>
-                          <span className="text-xs text-slate-400">
-                            {new Date(log.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-slate-200 font-semibold mb-1">
-                          {parsed.filename}
-                        </p>
-                        <p className="text-xs text-slate-400 font-mono break-all">
-                          {parsed.filepath}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
           </div>
         </div>
       </div>
