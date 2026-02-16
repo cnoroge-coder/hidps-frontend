@@ -16,6 +16,17 @@ const getSeverityStyling = (severity: number) => {
     }
 };
 
+const getEventSeverity = (alertType: string): number => {
+    switch (alertType) {
+        case 'ssh_brute_force': return 4; // Critical
+        case 'port_scan': return 3; // High
+        case 'auth_failure': return 2; // Medium
+        case 'auth_success': return 1; // Low
+        case 'auth_logout': return 1; // Low
+        default: return 1; // Low
+    }
+};
+
 type Alert = Database['public']['Tables']['alerts']['Row'];
 
 interface DailyReport {
