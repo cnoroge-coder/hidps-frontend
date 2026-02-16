@@ -13,6 +13,7 @@ interface AgentContextType {
   setSelectedAgent: (agent: Agent | null) => void;
   agents: Agent[];
   refreshAgents: () => Promise<void>;
+  deleteAgent: (agentId: string) => void;
 }
 
 const AgentContext = createContext<AgentContextType | undefined>(undefined);
@@ -35,29 +36,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchAgents = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setAgents([]);
+  const deleteAgent = (agentId: string) => {
+    // Remove from local agents list (not from database)
+    setAgents(prev => prev.filter(agent => agent.id !== agentId));
+    // If the deleted agent was selected, clear selection
+    if (selectedAgent?.id === agentId) {
       setSelectedAgent(null);
-      return;
-    }
-
-    const { data, error } = await supabase.from('agents').select('*');
-    
-    if (error) {
-      console.error('Error fetching agents:', error);
-      setAgents([]);
-    } else if (data) {
-      setAgents(data);
-      // Set selected agent: prefer stored one, otherwise first in list
-      const storedId = typeof window !== 'undefined' ? localStorage.getItem('selectedAgentId') : null;
-      const storedAgent = storedId ? data.find(a => a.id === storedId) : null;
-      if (storedAgent) {
-        setSelectedAgentState(storedAgent);
-      } else if (!selectedAgent && data.length > 0) {
-        setSelectedAgent(data[0]);
-      }
     }
   };
 
@@ -86,7 +70,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AgentContext.Provider value={{ selectedAgent, setSelectedAgent, agents, refreshAgents: fetchAgents }}>
+    <AgentContext.Provider value={{ selectedAgent, setSelectedAgent, agents, refreshAgents: fetchAgents, deleteAgent }}>
       {children}
     </AgentContext.Provider>
   );

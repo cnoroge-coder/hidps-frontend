@@ -28,15 +28,29 @@ const getEventIcon = (alertType: string) => {
     }
 };
 
-const getEventColor = (alertType: string) => {
-    switch (alertType) {
-        case 'ssh_brute_force': return 'text-red-400 bg-red-500/20 border-red-500/30';
-        case 'port_scan': return 'text-orange-400 bg-orange-500/20 border-orange-500/30';
-        case 'auth_success': return 'text-green-400 bg-green-500/20 border-green-500/30';
-        case 'auth_failure': return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
-        case 'auth_logout': return 'text-blue-400 bg-blue-500/20 border-blue-500/30'; // Blue for logout
-        default: return 'text-blue-400 bg-blue-500/20 border-blue-500/30';
+const getSeverityStyling = (severity: number) => {
+    switch (severity) {
+        case 4: return 'bg-red-500/20 text-red-400 border-red-500/30'; // Critical
+        case 3: return 'bg-orange-500/20 text-orange-400 border-orange-500/30'; // High
+        case 2: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'; // Medium
+        default: return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // Low
     }
+};
+
+const getEventSeverity = (alertType: string): number => {
+    switch (alertType) {
+        case 'ssh_brute_force': return 4; // Critical
+        case 'port_scan': return 3; // High
+        case 'auth_failure': return 2; // Medium
+        case 'auth_success': return 1; // Low
+        case 'auth_logout': return 1; // Low
+        default: return 1; // Low
+    }
+};
+
+const getEventColor = (alertType: string) => {
+    const severity = getEventSeverity(alertType);
+    return getSeverityStyling(severity);
 };
 
 // --- MAIN NETWORK PAGE COMPONENT ---
