@@ -14,7 +14,6 @@ const networkEventTypes = [
     { name: 'SSH Logins', dbTypes: ['auth_success', 'auth_failure', 'auth_logout'], icon: Shield },
     { name: 'Brute Force', dbTypes: ['ssh_brute_force'], icon: AlertTriangle },
     { name: 'Port Scans', dbTypes: ['port_scan'], icon: Zap },
-    { name: 'Shell Access', dbTypes: ['auth_info'], icon: Users },
 ];
 
 const getEventIcon = (alertType: string) => {
@@ -49,8 +48,7 @@ const getEventSeverity = (alertType: string): number => {
 };
 
 const getEventColor = (alertType: string) => {
-    const severity = getEventSeverity(alertType);
-    return getSeverityStyling(severity);
+    return 'bg-blue-900 text-white border-blue-700';
 };
 
 // --- MAIN NETWORK PAGE COMPONENT ---
