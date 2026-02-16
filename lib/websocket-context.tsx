@@ -76,7 +76,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         }
 
         if (message.type === "log_stream") {
-          setLogs((prevLogs) => [message.log, ...prevLogs]);
+          setLogs((prevLogs) => [message.log, ...prevLogs].slice(0, 10));
         }
 
         if (message.type === "security_alert") {
