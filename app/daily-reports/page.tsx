@@ -81,8 +81,8 @@ export default function DailyReportsPage() {
               // Count by type
               alertsByType[alert.alert_type] = (alertsByType[alert.alert_type] || 0) + 1;
 
-              // Extract IPs from data or message
-              const ip = alert.data?.source_ip || alert.message.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/)?.[0];
+              // Extract IPs from message
+              const ip = alert.message.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/)?.[0];
               if (ip) {
                 ipCounts[ip] = (ipCounts[ip] || 0) + 1;
               }
