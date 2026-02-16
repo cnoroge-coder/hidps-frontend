@@ -63,12 +63,17 @@ export default function DailyReportsPage() {
 
         if (error) throw error;
 
-        // Group alerts by date
+        // Group alerts by date (only last 3 days)
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
         const alertsByDate: Record<string, Alert[]> = {};
         alerts?.forEach(alert => {
-          const date = new Date(alert.created_at).toISOString().split('T')[0];
-          if (!alertsByDate[date]) alertsByDate[date] = [];
-          alertsByDate[date].push(alert);
+          const alertDate = new Date(alert.created_at);
+          if (alertDate >= threeDaysAgo) {
+            const date = alertDate.toISOString().split('T')[0];
+            if (!alertsByDate[date]) alertsByDate[date] = [];
+            alertsByDate[date].push(alert);
+          }
         });
 
         // Generate reports

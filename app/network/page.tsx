@@ -14,7 +14,6 @@ const networkEventTypes = [
     { name: 'SSH Logins', dbTypes: ['auth_success', 'auth_failure', 'auth_logout'], icon: Shield },
     { name: 'Brute Force', dbTypes: ['ssh_brute_force'], icon: AlertTriangle },
     { name: 'Port Scans', dbTypes: ['port_scan'], icon: Zap },
-    { name: 'Shell Access', dbTypes: ['auth_info'], icon: Users },
 ];
 
 const getEventIcon = (alertType: string) => {
@@ -231,7 +230,7 @@ export default function NetworkPage() {
       </div>
 
       {/* Events List */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow max-h-96 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow max-h-[600px] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
