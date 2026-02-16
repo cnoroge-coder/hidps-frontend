@@ -1,10 +1,13 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Shield, Lock, Activity, Bell, Terminal, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LandingPage() {
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     const elements = document.querySelectorAll('.animate-on-scroll');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -20,6 +23,10 @@ export default function LandingPage() {
 
     return () => observer.disconnect();
   }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-blue-500/30">
