@@ -255,12 +255,12 @@ export default function DailyReportsPage() {
                           const severity = getEventSeverity(type);
                           const severityClasses = getSeverityStyling(severity);
                           return (
-                            <div key={type} className={`p-4 rounded-lg border ${severityClasses}`}>
+                            <div key={type} className="bg-black p-4 rounded-lg border border-blue-950">
                               <div className="flex items-center gap-3">
-                                <Icon size={24} className="text-current" />
+                                <Icon size={24} className="text-white" />
                                 <div>
-                                  <div className="font-semibold">{getAlertTypeLabel(type)}</div>
-                                  <div className="text-2xl font-bold">{count}</div>
+                                  <div className="font-semibold text-white">{getAlertTypeLabel(type)}</div>
+                                  <div className="text-2xl font-bold text-white">{count}</div>
                                 </div>
                               </div>
                             </div>

@@ -14,6 +14,7 @@ const networkEventTypes = [
     { name: 'SSH Logins', dbTypes: ['auth_success', 'auth_failure', 'auth_logout'], icon: Shield },
     { name: 'Brute Force', dbTypes: ['ssh_brute_force'], icon: AlertTriangle },
     { name: 'Port Scans', dbTypes: ['port_scan'], icon: Zap },
+    { name: 'Shell Access', dbTypes: ['auth_info'], icon: Users },
 ];
 
 const getEventIcon = (alertType: string) => {
@@ -29,10 +30,10 @@ const getEventIcon = (alertType: string) => {
 
 const getSeverityStyling = (severity: number) => {
     switch (severity) {
-        case 4: return 'bg-red-500/20 text-red-400 border-red-500/30'; // Critical
-        case 3: return 'bg-orange-500/20 text-orange-400 border-orange-500/30'; // High
-        case 2: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'; // Medium
-        default: return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // Low
+        case 4: return 'bg-slate-800 text-red-400 border-slate-700'; // Critical
+        case 3: return 'bg-slate-800 text-orange-400 border-slate-700'; // High
+        case 2: return 'bg-slate-800 text-yellow-400 border-slate-700'; // Medium
+        default: return 'bg-slate-800 text-blue-400 border-slate-700'; // Low
     }
 };
 
@@ -48,7 +49,8 @@ const getEventSeverity = (alertType: string): number => {
 };
 
 const getEventColor = (alertType: string) => {
-    return 'bg-blue-900 text-white border-blue-700';
+    const severity = getEventSeverity(alertType);
+    return getSeverityStyling(severity);
 };
 
 // --- MAIN NETWORK PAGE COMPONENT ---
