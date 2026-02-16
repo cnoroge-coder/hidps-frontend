@@ -7,15 +7,25 @@ import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/lib/supabase/database.types';
 import Sidebar from '@/components/Sidebar';
 
-type Alert = Database['public']['Tables']['alerts']['Row'];
+const getSeverityStyling = (severity: number) => {
+    switch (severity) {
+        case 4: return 'bg-red-500/20 text-red-400 border-red-500/30'; // Critical
+        case 3: return 'bg-orange-500/20 text-orange-400 border-orange-500/30'; // High
+        case 2: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'; // Medium
+        default: return 'bg-blue-500/20 text-blue-400 border-blue-500/30'; // Low
+    }
+};
 
-interface DailyReport {
-  date: string;
-  totalAlerts: number;
-  alertsByType: Record<string, number>;
-  topIPs: Array<{ ip: string; count: number }>;
-  alerts: Alert[];
-}
+const getEventSeverity = (alertType: string): number => {
+    switch (alertType) {
+        case 'ssh_brute_force': return 4; // Critical
+        case 'port_scan': return 3; // High
+        case 'auth_failure': return 2; // Medium
+        case 'auth_success': return 1; // Low
+        case 'auth_logout': return 1; // Low
+        default: return 1; // Low
+    }
+};
 
 export default function DailyReportsPage() {
   const { selectedAgent } = useAgent();
@@ -232,13 +242,15 @@ export default function DailyReportsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Object.entries(selectedReport.alertsByType).map(([type, count]) => {
                           const Icon = getAlertTypeIcon(type);
+                          const severity = getEventSeverity(type);
+                          const severityClasses = getSeverityStyling(severity);
                           return (
-                            <div key={type} className="bg-slate-800 p-4 rounded-lg">
+                            <div key={type} className={`p-4 rounded-lg border ${severityClasses}`}>
                               <div className="flex items-center gap-3">
-                                <Icon size={24} className="text-cyan-400" />
+                                <Icon size={24} className="text-current" />
                                 <div>
-                                  <div className="font-semibold text-white">{getAlertTypeLabel(type)}</div>
-                                  <div className="text-2xl font-bold text-cyan-400">{count}</div>
+                                  <div className="font-semibold">{getAlertTypeLabel(type)}</div>
+                                  <div className="text-2xl font-bold">{count}</div>
                                 </div>
                               </div>
                             </div>
