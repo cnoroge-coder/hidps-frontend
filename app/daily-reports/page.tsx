@@ -37,6 +37,7 @@ interface DailyReport {
   alerts: Alert[];
   uniqueIPs: number;
   timeRange: { start: string; end: string };
+  mostActiveType: string;
 }
 
 export default function DailyReportsPage() {
@@ -80,12 +81,11 @@ export default function DailyReportsPage() {
               // Count by type
               alertsByType[alert.alert_type] = (alertsByType[alert.alert_type] || 0) + 1;
 
-              // Extract IPs from message
-              const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
-              const ips = alert.message.match(ipRegex) || [];
-              ips.forEach(ip => {
+              // Extract IPs from data or message
+              const ip = alert.data?.source_ip || alert.message.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/)?.[0];
+              if (ip) {
                 ipCounts[ip] = (ipCounts[ip] || 0) + 1;
-              });
+              }
             });
 
             const topIPs = Object.entries(ipCounts)
@@ -99,6 +99,7 @@ export default function DailyReportsPage() {
               start: sortedAlerts[0]?.created_at || '',
               end: sortedAlerts[sortedAlerts.length - 1]?.created_at || ''
             };
+            const mostActiveType = Object.entries(alertsByType).sort(([,a], [,b]) => b - a)[0]?.[0] || 'None';
 
             return {
               date,
@@ -107,7 +108,8 @@ export default function DailyReportsPage() {
               topIPs,
               alerts: dayAlerts,
               uniqueIPs,
-              timeRange
+              timeRange,
+              mostActiveType
             };
           })
           .sort((a, b) => b.date.localeCompare(a.date));
